@@ -61,6 +61,7 @@ yarn install
 
 <h2>Usage 💬</h2>
 
+-   **`/receipt list`**: Show list of receipt data in specific channel
 
 <h2>🧑‍💻 Contributing</h2>
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.

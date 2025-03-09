@@ -2,6 +2,7 @@ import { IRead, IHttp } from "@rocket.chat/apps-engine/definition/accessors";
 import { IMessage, IMessageAttachment } from "@rocket.chat/apps-engine/definition/messages";
 import { OCR_SYSTEM_PROMPT } from "../const/prompt";
 import { getAPIConfig } from "../config/settings";
+import { RECEIPT_VALIDATION_PROMPT } from "../const/prompt";
 
 export async function processImage (
     http: IHttp,
@@ -73,4 +74,15 @@ export async function convertImageToBase64(
 
 export function isImageAttachment(attachment: IMessageAttachment): boolean {
     return attachment.imageUrl != undefined
+}
+
+export async function validateImage(http: IHttp, message: IMessage, read: IRead): Promise<boolean> {
+    try {
+        const response = await processImage(http, message, read, RECEIPT_VALIDATION_PROMPT);
+        const jsonResponse = JSON.parse(response);
+        return jsonResponse.is_receipt === true;
+    } catch (error) {
+        console.error("Error validating image:", error);
+        return false;
+    }
 }

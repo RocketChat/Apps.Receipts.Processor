@@ -45,6 +45,12 @@
         },
         {
             "name": "upload.read"
+        },
+        {
+            "name": "persistence"
+        },
+        {
+            "name": "slashcommand"
         }
     ]
 }
