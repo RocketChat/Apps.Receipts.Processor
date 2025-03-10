@@ -6,52 +6,63 @@ import {
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
 import { IReceiptData, IReceiptItem } from "../domain/receipt";
-import { addReceipt, getReceiptByUserAndRoom } from "../repository/receiptRepository";
 import { EMPTY_ROOM_RECEIPTS_RESPONSE, FAILED_GET_RECEIPTS_RESPONSE, INVALID_IMAGE_RESPONSE } from '../const/response';
 import { sendMessage } from '../utils/message';
+import { ReceiptService } from '../service/receiptService';
 
-export async function parseReceiptData(
-  data: string,
-  userId: string,
-  messageId: string,
-  roomId: string,
-  persistence: IPersistence
-): Promise<string> {
-  try {
-    const parsedData = JSON.parse(data);
-    if (!parsedData.items || !Array.isArray(parsedData.items) ||
-        typeof parsedData.extra_fees !== 'number' ||
-        typeof parsedData.total_price !== 'number') {
+export class ReceiptHandler {
+  constructor(
+    private readonly persistence: IPersistence,
+    private readonly persistenceRead: IPersistenceRead,
+    private readonly modify: IModify
+  ) {
+    this.receiptService = new ReceiptService(persistence, persistenceRead);
+  }
+
+  private readonly receiptService: ReceiptService;
+
+  public async parseReceiptData(
+    data: string,
+    userId: string,
+    messageId: string,
+    roomId: string
+  ): Promise<string> {
+    try {
+      const parsedData = JSON.parse(data);
+      if (!parsedData.items || !Array.isArray(parsedData.items) ||
+          typeof parsedData.extra_fees !== 'number' ||
+          typeof parsedData.total_price !== 'number') {
+        return INVALID_IMAGE_RESPONSE;
+      }
+
+      const receiptData: IReceiptData = {
+        userId,
+        messageId,
+        roomId,
+        items: parsedData.items.map((item: any): IReceiptItem => ({
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity
+        })),
+        extraFee: parsedData.extra_fees,
+        totalPrice: parsedData.total_price,
+        uploadedDate: new Date(),
+        receiptDate: ""
+      };
+
+      if(parsedData.receipt_date) {
+          receiptData.receiptDate = parsedData.receipt_date;
+      }
+
+      await this.receiptService.addReceipt(receiptData);
+
+      return data;
+    } catch(error) {
       return INVALID_IMAGE_RESPONSE;
     }
-
-    const receiptData: IReceiptData = {
-      userId,
-      messageId,
-      roomId,
-      items: parsedData.items.map((item: any): IReceiptItem => ({
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity
-      })),
-      extraFee: parsedData.extra_fees,
-      totalPrice: parsedData.total_price,
-      uploadedDate: new Date(),
-      receiptDate: ""
-    };
-
-    if(parsedData.receipt_date) {
-        receiptData.receiptDate = parsedData.receipt_date
-    }
-    await addReceipt(persistence, receiptData);
-
-    return data;
-  } catch(error) {
-    return INVALID_IMAGE_RESPONSE;
   }
-}
 
-export function convertReceiptDataToResponse(receiptData: IReceiptData): string {
+  public convertReceiptDataToResponse(receiptData: IReceiptData): string {
     let response = `📝 *Your Receipt Summary*\n\n`;
     response += "*Date:* " + receiptData.receiptDate + "\n"
     response += "*Items:*\n";
@@ -67,20 +78,19 @@ export function convertReceiptDataToResponse(receiptData: IReceiptData): string 
     response += `*Total:* $${receiptData.totalPrice.toFixed(2)}`;
 
     return response;
-}
+  }
 
-export async function listReceiptData(
-    read: IPersistenceRead,
-    modify: IModify,
+  public async listReceiptData(
     sender: IUser,
     room: IRoom,
     appUser: IUser
-): Promise<void> {
+  ): Promise<void> {
     try {
-      const receipts = await getReceiptByUserAndRoom(read, sender.id, room.id);
+      const receipts = await this.receiptService.getReceiptByUserAndRoom(sender.id, room.id);
+
       if (!receipts || receipts.length === 0) {
         await sendMessage(
-          modify,
+          this.modify,
           appUser,
           room,
           EMPTY_ROOM_RECEIPTS_RESPONSE
@@ -117,14 +127,15 @@ export async function listReceiptData(
         }
       });
 
-      await sendMessage(modify, appUser, room, summary);
+      await sendMessage(this.modify, appUser, room, summary);
     } catch (error) {
       console.error('Error listing receipts:', error);
       await sendMessage(
-        modify,
+        this.modify,
         appUser,
         room,
         FAILED_GET_RECEIPTS_RESPONSE
       );
     }
   }
+}

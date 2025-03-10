@@ -10,14 +10,14 @@ import {
 import { App } from '@rocket.chat/apps-engine/definition/App';
 import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
 import { IMessage, IPostMessageSent } from "@rocket.chat/apps-engine/definition/messages";
-import { isImageAttachment, processImage, validateImage } from "./src/lib/imageProcessing"
 import { settings } from './src/config/settings';
 import { sendMessage } from "./src/utils/message";
 import { RECEIPT_SCAN_PROMPT } from './src/const/prompt';
 import { GENERAL_ERROR_RESPONSE, INVALID_IMAGE_RESPONSE, SUCCESSFUL_IMAGE_DETECTION_RESPONSE } from './src/const/response';
-import { parseReceiptData, convertReceiptDataToResponse } from './src/lib/receiptProcessing';
-import { IReceiptData, IReceiptItem } from './src/domain/receipt';
 import { ReceiptCommand } from './src/commands/ReceiptCommand';
+import { ImageProcessor } from "./src/lib/imageHandler";
+import { ReceiptHandler } from './src/lib/receiptHandler';
+import { IReceiptData, IReceiptItem } from './src/domain/receipt';
 
 export class ReceiptProcessorApp extends App implements IPostMessageSent {
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
@@ -44,16 +44,19 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent {
         persistence: IPersistence,
         modify: IModify
     ): Promise<void> {
-        this.getLogger().info("Execute post message sent");
+        this.getLogger().info("Execute post message sent")
         const appUser = await this.getAccessors().reader.getUserReader().getAppUser(this.getID())
-        const isReceipt = await validateImage(http, message, read)
+        const imageProcessor = new ImageProcessor(http, read)
+        const isReceipt = await imageProcessor.validateImage(message)
         const userId = message.sender.id
         const messageId = message.id
 
         if (appUser) {
             if(isReceipt && messageId) {
-                const response = await processImage(http, message, read, RECEIPT_SCAN_PROMPT)
-                const result = await parseReceiptData(response, userId, messageId, message.room.id, persistence);
+                const receiptHandler = new ReceiptHandler(persistence, read.getPersistenceReader(), modify)
+
+                const response = await imageProcessor.processImage(message, RECEIPT_SCAN_PROMPT)
+                const result = await receiptHandler.parseReceiptData(response, userId, messageId, message.room.id)
 
                 if (result === INVALID_IMAGE_RESPONSE) {
                     sendMessage(modify, appUser, message.room, INVALID_IMAGE_RESPONSE);
@@ -70,24 +73,29 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent {
                             uploadedDate: new Date(),
                             receiptDate: parsedResult.receipt_date
                         };
-                        const botResponse = convertReceiptDataToResponse(receiptData);
+
+                        const botResponse = receiptHandler.convertReceiptDataToResponse(receiptData);
                         sendMessage(modify, appUser, message.room, botResponse);
-                        sendMessage(modify, appUser, message.room, SUCCESSFUL_IMAGE_DETECTION_RESPONSE)
+                        sendMessage(modify, appUser, message.room, SUCCESSFUL_IMAGE_DETECTION_RESPONSE);
                     } catch (error) {
                         this.getLogger().error("Failed to parse receipt data for human-readable output:", error);
-                        sendMessage(modify, appUser, message.room, GENERAL_ERROR_RESPONSE);
+                        sendMessage(modify, appUser, message.room, GENERAL_ERROR_RESPONSE)
                     }
                 }
             } else {
-                sendMessage(modify, appUser, message.room, INVALID_IMAGE_RESPONSE)
+                sendMessage(modify, appUser, message.room, INVALID_IMAGE_RESPONSE);
             }
         } else {
-            this.getLogger().error("App user not found. Message not sent.");
+            this.getLogger().error("App user not found. Message not sent.")
         }
     }
 
     public async checkPostMessageSent(message: IMessage): Promise<boolean> {
         this.getLogger().info("Message Attachments:", message.attachments);
-        return message.attachments?.some(isImageAttachment) ?? false;
+        return message.attachments?.some(ImageProcessor.isImageAttachment) ?? false;
+    }
+
+    public getReceiptHandler(persistence: IPersistence, read: IRead, modify: IModify): ReceiptHandler {
+        return new ReceiptHandler(persistence, read.getPersistenceReader(), modify);
     }
 }

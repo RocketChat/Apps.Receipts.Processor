@@ -23,7 +23,7 @@ export class ReceiptCommand implements ISlashCommand {
         read: IRead,
         modify: IModify,
         http: IHttp,
-        persistence: IPersistence
+        persistence: IPersistence,
     ): Promise<void> {
         const command = context.getArguments();
         const sender = context.getSender();
