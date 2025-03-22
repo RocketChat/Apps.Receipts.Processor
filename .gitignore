@@ -1,6 +1,9 @@
 # ignore modules pulled in from npm
 node_modules/
 
+# ignore environment files for tests
+tests/.env
+
 # rc-apps package output
 dist/
 
