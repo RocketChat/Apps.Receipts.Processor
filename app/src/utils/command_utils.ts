@@ -60,64 +60,83 @@ export class CommandUtility {
     }
 
     public async execute() {
-        const appUser = await this.getAppUser();
-        if (!appUser) {
-            return;
-        }
+        try {
+            const appUser = await this.getAppUser();
+            if (!appUser) {
+                this.app.getLogger().error("App user not found");
+                return;
+            }
 
-        const commandLength = this.command.length;
-        if (commandLength === 0) {
-            this.showHelp(appUser);
-            return;
-        }
+            const commandLength = this.command.length;
+            this.app.getLogger().info(`Executing command with args:`, this.command);
 
-        const mainCommand = this.command[0].toLowerCase();
+            if (commandLength === 0) {
+                this.showHelp(appUser);
+                return;
+            }
 
-        switch (mainCommand) {
-            case "list":
-                await this.receiptHandler.listReceiptDataByRoomAndUser(this.sender, this.room, appUser);
-                break;
+            const mainCommand = this.command[0].toLowerCase();
+            this.app.getLogger().info(`Main command: ${mainCommand}`);
 
-            case "room":
-                await this.receiptHandler.listReceiptDataByRoom(this.room, appUser);
-                break;
+            switch (mainCommand) {
+                case "list":
+                    await this.receiptHandler.listReceiptDataByRoomAndUser(this.sender, this.room, appUser);
+                    break;
 
-            case "date":
-                if (commandLength < 2) {
-                    sendMessage(this.modify, appUser, this.room, "Please provide a date in YYYY-MM-DD format.");
-                    return;
-                }
-                try {
-                    const dateStr = this.command[1];
-                    const date = new Date(dateStr);
-                    if (isNaN(date.getTime())) {
-                        sendMessage(this.modify, appUser, this.room, "Invalid date format. Please use YYYY-MM-DD format.");
+                case "room":
+                    await this.receiptHandler.listReceiptDataByRoom(this.room, appUser);
+                    break;
+
+                case "date":
+                    if (commandLength < 2) {
+                        sendMessage(this.modify, appUser, this.room, "Please provide a date in YYYY-MM-DD format.");
                         return;
                     }
+                    try {
+                        const dateStr = this.command[1];
+                        const date = new Date(dateStr);
+                        if (isNaN(date.getTime())) {
+                            sendMessage(this.modify, appUser, this.room, "Invalid date format. Please use YYYY-MM-DD format.");
+                            return;
+                        }
 
-                    await this.receiptHandler.listReceiptDataByUserAndUploadDate(
-                        this.sender.id,
-                        date,
+                        await this.receiptHandler.listReceiptDataByUserAndUploadDate(
+                            this.sender.id,
+                            date,
+                            this.room,
+                            appUser
+                        );
+                    } catch (error) {
+                        this.app.getLogger().error("Error processing date command:", error);
+                        sendMessage(this.modify, appUser, this.room, "Error processing date. Please use YYYY-MM-DD format.");
+                    }
+                    break;
+
+                case "help":
+                    this.showHelp(appUser);
+                    break;
+
+                default:
+                    sendMessage(
+                        this.modify,
+                        appUser,
                         this.room,
-                        appUser
+                        `Unknown command: ${mainCommand}. Type \`/receipt help\` for available commands.`
                     );
-                } catch (error) {
-                    sendMessage(this.modify, appUser, this.room, "Error processing date. Please use YYYY-MM-DD format.");
-                }
-                break;
+                    break;
+            }
+        } catch (error) {
+            this.app.getLogger().error("Error in CommandUtility.execute:", error);
 
-            case "help":
-                this.showHelp(appUser);
-                break;
-
-            default:
+            const appUser = await this.getAppUser();
+            if (appUser) {
                 sendMessage(
                     this.modify,
                     appUser,
                     this.room,
-                    `Unknown command: ${mainCommand}. Type \`/receipt help\` for available commands.`
+                    "An error occurred while processing your command. Please try again."
                 );
-                break;
+            }
         }
     }
 }
