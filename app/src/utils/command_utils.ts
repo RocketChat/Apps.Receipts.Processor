@@ -10,7 +10,7 @@ import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { IExecutorProps } from "../domain/commandExecutor";
 import { ReceiptProcessorApp } from "../../ReceiptProcessorApp";
 import { ReceiptHandler } from "../handler/receiptHandler";
-import { sendMessage } from '../utils/message';
+import { sendMessage } from './message';
 
 export class CommandUtility {
     sender: IUser;

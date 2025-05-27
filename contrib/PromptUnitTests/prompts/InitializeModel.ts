@@ -2,17 +2,19 @@ import {
     OCR_SYSTEM_PROMPT,
     RECEIPT_SCAN_PROMPT,
     RECEIPT_VALIDATION_PROMPT,
-} from "../../../src/const/prompt";
+    USER_RESPONSE_VALIDATION_PROMPT
+} from "../../../source_code/src/const/prompt";
 import {
     modelStorage,
     PromptLibrary,
-} from "../../../src/contrib/prompt-library/npm-module";
+} from "../../../source_code/src/contrib/prompt-library/npm-module";
 
 modelStorage.initialize(
     {
         OCR_SYSTEM_PROMPT: OCR_SYSTEM_PROMPT,
         RECEIPT_SCAN_PROMPT: RECEIPT_SCAN_PROMPT,
         RECEIPT_VALIDATION_PROMPT: RECEIPT_VALIDATION_PROMPT,
+        USER_RESPONSE_VALIDATION_PROMPT: USER_RESPONSE_VALIDATION_PROMPT
     },
     [
         {
@@ -23,6 +25,7 @@ modelStorage.initialize(
                 "OCR_SYSTEM_PROMPT",
                 "RECEIPT_SCAN_PROMPT",
                 "RECEIPT_VALIDATION_PROMPT",
+                "USER_RESPONSE_VALIDATION_PROMPT"
             ],
         },
     ]
@@ -40,3 +43,4 @@ export const ReceiptValidationPrompt = PromptLibrary.getPrompt(
     "meta-llama/Llama-3.2-11B-Vision-Instruct",
     "RECEIPT_VALIDATION_PROMPT"
 );
+

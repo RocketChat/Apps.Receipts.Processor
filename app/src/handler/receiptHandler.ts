@@ -21,6 +21,28 @@ export class ReceiptHandler {
 
   private readonly receiptService: ReceiptService;
 
+  public async addReceiptData(
+    parsedData: IReceiptData,
+  ) : Promise<void> {
+    const receiptData: IReceiptData = {
+        userId: parsedData.userId,
+        messageId: parsedData.messageId,
+        roomId: parsedData.roomId,
+        items: parsedData.items.map((item: any): IReceiptItem => ({
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity
+        })),
+        extraFee: parsedData.extraFee,
+        totalPrice: parsedData.totalPrice,
+        uploadedDate: new Date(),
+        receiptDate: parsedData.receiptDate || ""
+    };
+
+    await this.receiptService.addReceipt(receiptData);
+  }
+
+
   public async parseReceiptData(
     data: string,
     userId: string,
@@ -54,9 +76,7 @@ export class ReceiptHandler {
           receiptData.receiptDate = parsedData.receipt_date;
       }
 
-      await this.receiptService.addReceipt(receiptData);
-
-      return data;
+      return JSON.stringify(receiptData);
     } catch(error) {
       return INVALID_IMAGE_RESPONSE;
     }

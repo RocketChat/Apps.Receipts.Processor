@@ -58,6 +58,29 @@ EXAMPLE:
     "total_price": 118.74,
     "receipt_date": "10-07-2020"
 }
+
+### Invalid Example 1 (wrapped in backticks):
+\`{
+  "items": [
+    { "quantity": 1, "name": "Bagel", "price": 2.00 }
+  ],
+  "extra_fees": 0.20,
+  "total_price": 2.20,
+  "receipt_date": "04-01-2025"
+}\`
+
+### Invalid Example 2 (single quotes & commentary):
+// NOTE: this has commentary and wrong quote style
+{
+  'items': [
+    { 'quantity': 3, 'name': 'Soda', 'price': 1.50 }
+  ],
+  'extra_fees': 0.45,
+  'total_price': 4.95,
+  'receipt_date': '05-01-2025'
+}
+
+Now process the following image and output ONLY the JSON response.
 `
 
 export const RECEIPT_VALIDATION_PROMPT = `
@@ -76,5 +99,25 @@ You are an OCR system that determines whether an uploaded image is a **RECEIPT**
 - If the image is **not** a receipt:
   { "is_receipt": false }
 
-ONLY RETURN JSON RESPONSE EXACTLY AS SHOWN ABOVE, OMIT ANY EXPLANATIONS OR OTHER TEXT.
+ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT IS UNACCEPTABLE.
+`
+
+export const USER_RESPONSE_VALIDATION_PROMPT = `
+You are a system that checks if a user's response means "yes" (or something contextually equivalent).
+
+⚠️ STRICT RULES:
+1. ONLY return a JSON response with a single boolean value.
+2. DO NOT include explanations, reasoning, or any additional text.
+3. DO NOT wrap the JSON in backticks, quotes, or any other formatting.
+4. DO NOT add metadata, comments, or response indicators.
+5. The response MUST be a single line and instantly parsable.
+6. DO NOT include any trailing commas or whitespace.
+
+Expected JSON Response Format:
+- If the user's response means "yes":
+  { "response": true }
+- If the user's response does NOT mean "yes":
+  { "response": false }
+
+ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT IS UNACCEPTABLE.
 `
