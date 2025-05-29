@@ -78,16 +78,16 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
                             messageId,
                             roomId: message.room.id,
                             items: parsedResult.items as IReceiptItem[],
-                            extraFee: parsedResult.extraFee,         // <-- CORRECT
-                            totalPrice: parsedResult.totalPrice,     // <-- CORRECT
+                            extraFee: parsedResult.extraFee,
+                            totalPrice: parsedResult.totalPrice,
                             uploadedDate: new Date(),
-                            receiptDate: parsedResult.receiptDate    // <-- CORRECT
+                            receiptDate: parsedResult.receiptDate
                         };
 
                         const botResponse = receiptHandler.convertReceiptDataToResponse(receiptData);
-                        let question = "Are you sure to save this receipt data ? (yes / no)"
-                        sendMessage(modify, appUser, message.room, botResponse);
+                        let question = "Are you sure to save this receipt data ?"
                         sendMessage(modify, appUser, message.room, question);
+                        sendMessage(modify, appUser, message.room, botResponse);
                         await sendConfirmationButtons(modify, appUser, message.room, receiptData);
                     } catch (error) {
                         this.getLogger().error("Failed to parse receipt data for human-readable output:", error);
