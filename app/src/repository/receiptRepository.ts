@@ -5,7 +5,7 @@ import {
 import {
     RocketChatAssociationRecord,
 } from "@rocket.chat/apps-engine/definition/metadata";
-import { IReceiptData } from "../domain/receipt";
+import { IReceiptData } from "../types/receipt";
 import { Associations } from "../utils/associations";
 
 export const addReceipt = async (

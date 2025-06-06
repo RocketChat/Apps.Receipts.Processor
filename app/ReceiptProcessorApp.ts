@@ -16,14 +16,16 @@ import { GENERAL_ERROR_RESPONSE, INVALID_IMAGE_RESPONSE, SUCCESSFUL_IMAGE_DETECT
 import { ReceiptCommand } from './src/commands/ReceiptCommand';
 import { ImageHandler } from "./src/handler/imageHandler";
 import { ReceiptHandler } from './src/handler/receiptHandler';
-import { IReceiptData, IReceiptItem } from './src/domain/receipt';
-import { OCR_SYSTEM_PROMPT, RECEIPT_SCAN_PROMPT, RECEIPT_VALIDATION_PROMPT } from "./src/const/prompt";
+import { IReceiptData, IReceiptItem } from './src/types/receipt';
+import { OCR_SYSTEM_PROMPT, RECEIPT_SCAN_PROMPT, RECEIPT_VALIDATION_PROMPT, USER_RESPONSE_VALIDATION_PROMPT, RECEIPT_PROCESSOR_RESPONSE_PROMPT } from "./src/const/prompt";
 import { modelStorage, PromptLibrary } from "./src/contrib/prompt-library/npm-module"
 import {
     IUIKitInteractionHandler,
     UIKitBlockInteractionContext,
     IUIKitResponse
 } from '@rocket.chat/apps-engine/definition/uikit';
+import { BotHandler } from './src/handler/botHandler';
+import { ChannelService } from './src/service/channelService';
 
 export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKitInteractionHandler {
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
@@ -52,17 +54,27 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         modify: IModify
     ): Promise<void> {
         this.getLogger().info("Execute post message sent")
+        this.getLogger().info("Thread ID : ", message.threadId)
+        const roomId = message.room.id;
+        const userId = message.sender.id;
+        const channelService = new ChannelService(persistence, read.getPersistenceReader());
+
+        const userChannels = await channelService.getChannels(userId);
+        if (!userChannels || !userChannels.includes(roomId)) {
+            this.getLogger().info(`Room ${roomId} is not in user ${userId}'s channel list. Ignoring message.`);
+            return;
+        }
+
         const appUser = await this.getAccessors().reader.getUserReader().getAppUser(this.getID())
         const imageProcessor = new ImageHandler(http, read)
         const isReceipt = await imageProcessor.validateImage(message)
-        const userId = message.sender.id
         const messageId = message.id
         const { modelType } = await getAPIConfig(read);
 
         if (appUser) {
             if(isReceipt && messageId) {
                 const receiptHandler = new ReceiptHandler(persistence, read.getPersistenceReader(), modify)
-
+                const botHandler = new BotHandler(http, read)
                 const response = await imageProcessor.processImage(message, PromptLibrary.getPrompt(modelType, "RECEIPT_SCAN_PROMPT"))
                 const result = await receiptHandler.parseReceiptData(response, userId, messageId, message.room.id)
 
@@ -84,10 +96,9 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
                             receiptDate: parsedResult.receiptDate
                         };
 
-                        const botResponse = receiptHandler.convertReceiptDataToResponse(receiptData);
-                        let question = "Are you sure to save this receipt data ?"
+                        //const botResponse = receiptHandler.convertReceiptDataToResponse(receiptData);
+                        let question = await botHandler.processResponse(RECEIPT_PROCESSOR_RESPONSE_PROMPT("The user just uploaded photo of a receipt", result, "Ask the user if they want to save the data or not ?"));
                         sendMessage(modify, appUser, message.room, question);
-                        sendMessage(modify, appUser, message.room, botResponse);
                         await sendConfirmationButtons(modify, appUser, message.room, receiptData);
                     } catch (error) {
                         this.getLogger().error("Failed to parse receipt data for human-readable output:", error);
@@ -138,6 +149,9 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
 
     public async checkPostMessageSent(message: IMessage): Promise<boolean> {
         this.getLogger().info("Message Attachments:", message.attachments);
+        this.getLogger().info("Message ID : ", message.id)
+        this.getLogger().info("Thread ID : ", message.threadId)
+
         return message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
     }
 
@@ -146,14 +160,15 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
             {
                 "OCR_SYSTEM_PROMPT": OCR_SYSTEM_PROMPT,
                 "RECEIPT_SCAN_PROMPT": RECEIPT_SCAN_PROMPT,
-                "RECEIPT_VALIDATION_PROMPT": RECEIPT_VALIDATION_PROMPT
+                "RECEIPT_VALIDATION_PROMPT": RECEIPT_VALIDATION_PROMPT,
+                "USER_RESPONSE_VALIDATION_PROMPT": USER_RESPONSE_VALIDATION_PROMPT
             },
             [
                 {
                     name: "meta-llama/Llama-3.2-11B-Vision-Instruct",
                     parameters: "11B",
                     quantization: "Vision",
-                    prompts: ["OCR_SYSTEM_PROMPT", "RECEIPT_SCAN_PROMPT", "RECEIPT_VALIDATION_PROMPT"]
+                    prompts: ["OCR_SYSTEM_PROMPT", "RECEIPT_SCAN_PROMPT", "RECEIPT_VALIDATION_PROMPT", "USER_RESPONSE_VALIDATION_PROMPT"]
                 }
             ]
         );

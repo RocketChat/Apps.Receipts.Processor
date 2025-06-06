@@ -5,7 +5,7 @@ import {
 } from '@rocket.chat/apps-engine/definition/accessors';
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
-import { IReceiptData, IReceiptItem } from "../domain/receipt";
+import { IReceiptData, IReceiptItem } from "../types/receipt";
 import { EMPTY_ROOM_RECEIPTS_RESPONSE, FAILED_GET_RECEIPTS_RESPONSE, INVALID_IMAGE_RESPONSE } from '../const/response';
 import { sendMessage } from '../utils/message';
 import { ReceiptService } from '../service/receiptService';

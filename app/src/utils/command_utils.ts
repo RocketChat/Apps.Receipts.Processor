@@ -7,10 +7,11 @@ import {
 import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
 import { SlashCommandContext } from "@rocket.chat/apps-engine/definition/slashcommands";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
-import { IExecutorProps } from "../domain/commandExecutor";
+import { IExecutorProps } from "../types/commandExecutor";
 import { ReceiptProcessorApp } from "../../ReceiptProcessorApp";
 import { ReceiptHandler } from "../handler/receiptHandler";
 import { sendMessage } from './message';
+import { ChannelService } from '../service/channelService';
 
 export class CommandUtility {
     sender: IUser;
@@ -22,7 +23,8 @@ export class CommandUtility {
     http: IHttp;
     persistence: IPersistence;
     app: ReceiptProcessorApp;
-    receiptHandler: ReceiptHandler
+    receiptHandler: ReceiptHandler;
+    channelService: ChannelService;
 
     constructor(props: IExecutorProps) {
         this.sender = props.sender;
@@ -35,6 +37,7 @@ export class CommandUtility {
         this.persistence = props.persistence;
         this.app = props.app;
         this.receiptHandler = new ReceiptHandler(this.persistence, this.read.getPersistenceReader(), this.modify)
+        this.channelService = new ChannelService(this.persistence, this.read.getPersistenceReader());
     }
 
     private async getAppUser(): Promise<IUser | undefined> {
@@ -54,6 +57,7 @@ export class CommandUtility {
         - \`/receipt list\` - Show your receipts in the current room
         - \`/receipt room\` - Show all receipts in the current room
         - \`/receipt date YYYY-MM-DD\` - Show your receipts from a specific date
+        - \`/receipt add_channel\` - Add this room to your channel list
         - \`/receipt help\` - Show this help message
         `;
         sendMessage(this.modify, appUser, this.room, helpMessage);
@@ -115,7 +119,25 @@ export class CommandUtility {
                 case "help":
                     this.showHelp(appUser);
                     break;
-
+                case "add_channel":
+                    try {
+                        await this.channelService.addChannel(this.room.id, this.sender.id);
+                        sendMessage(
+                            this.modify,
+                            appUser,
+                            this.room,
+                            "✅ This channel has been added to your channel list."
+                        );
+                    } catch (error) {
+                        this.app.getLogger().error("Error adding channel:", error);
+                        sendMessage(
+                            this.modify,
+                            appUser,
+                            this.room,
+                            "❌ Failed to add this channel to your channel list."
+                        );
+                    }
+                    break;
                 default:
                     sendMessage(
                         this.modify,

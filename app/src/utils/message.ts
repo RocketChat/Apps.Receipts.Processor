@@ -2,7 +2,7 @@ import { IModify } from '@rocket.chat/apps-engine/definition/accessors';
 import { IRoom } from '@rocket.chat/apps-engine/definition/rooms';
 import { IUser } from '@rocket.chat/apps-engine/definition/users';
 import { ButtonStyle } from '@rocket.chat/apps-engine/definition/uikit';
-import { IReceiptData } from '../domain/receipt';
+import { IReceiptData } from '../types/receipt';
 
 export async function sendMessage(
 	modify: IModify,

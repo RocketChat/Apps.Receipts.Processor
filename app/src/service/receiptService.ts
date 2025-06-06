@@ -1,5 +1,5 @@
 import { IPersistence, IPersistenceRead } from "@rocket.chat/apps-engine/definition/accessors";
-import { IReceiptData } from "../domain/receipt";
+import { IReceiptData } from "../types/receipt";
 import { Associations } from "../utils/associations";
 import * as ReceiptRepository from "../repository/receiptRepository";
 
