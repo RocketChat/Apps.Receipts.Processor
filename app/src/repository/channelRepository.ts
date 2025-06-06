@@ -1,4 +1,5 @@
 import {
+    ILogger,
     IPersistence,
     IPersistenceRead,
 } from "@rocket.chat/apps-engine/definition/accessors";
@@ -8,25 +9,26 @@ export const addChannel = async (
     persistence: IPersistence,
     persistenceRead: IPersistenceRead,
     roomId: string,
-    userAssoc: RocketChatAssociationRecord
+    userChannelAssoc: RocketChatAssociationRecord
 ): Promise<void> => {
-    const result = await persistenceRead.readByAssociation(userAssoc);
+    const result = await persistenceRead.readByAssociation(userChannelAssoc);
     let roomIds: string[] = [];
+
     if (result.length > 0 && Array.isArray(result[0])) {
         roomIds = result[0] as string[];
     }
 
     if (!roomIds.includes(roomId)) {
         roomIds.push(roomId);
-        await persistence.updateByAssociation(userAssoc, roomIds, true);
+        await persistence.updateByAssociation(userChannelAssoc, roomIds, true);
     }
 };
 
 export const getChannels = async (
     persistenceRead: IPersistenceRead,
-    userAssoc: RocketChatAssociationRecord
+    userChannelAssoc: RocketChatAssociationRecord
 ): Promise<string[]> => {
-    const result = await persistenceRead.readByAssociation(userAssoc);
+    const result = await persistenceRead.readByAssociation(userChannelAssoc);
 
     if (result.length > 0 && Array.isArray(result[0])) {
         return result[0] as string[];

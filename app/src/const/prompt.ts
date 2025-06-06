@@ -15,7 +15,7 @@ Your task is to extract and return data from the image which include only items 
 
 **Your output must be machine-readable JSON that exactly matches the required structure.**
 ### **Expected JSON Structure:**
-EXAMPLE:
+## VALID EXAMPLE:
 {
     "items": [
         {
@@ -80,7 +80,7 @@ EXAMPLE:
   'receipt_date': '05-01-2025'
 }
 
-Now process the following image and output ONLY the JSON response.
+Now process the following image and output ONLY the JSON response with correct structure.
 `
 
 export const RECEIPT_VALIDATION_PROMPT = `

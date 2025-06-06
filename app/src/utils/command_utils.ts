@@ -121,7 +121,9 @@ export class CommandUtility {
                     break;
                 case "add_channel":
                     try {
-                        await this.channelService.addChannel(this.room.id, this.sender.id);
+                        this.app.getLogger().info("Room id :", this.room.id)
+                        this.app.getLogger().info("user id :", this.sender.id)
+                        await this.channelService.addChannel(this.room.id, this.sender.id, this.app.getLogger());
                         sendMessage(
                             this.modify,
                             appUser,

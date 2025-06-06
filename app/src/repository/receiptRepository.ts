@@ -14,7 +14,7 @@ export const addReceipt = async (
 ): Promise<void> => {
     const roomAssociationKey = Associations.withRoom(data.roomId)
     const messageAssociationKey = Associations.withMessage(data.messageId)
-    const userAssociationKey = Associations.withUser(data.userId)
+    const userAssociationKey = Associations.withUserReceipts(data.userId)
     const dayAssociationKey = Associations.withDate(data.uploadedDate)
 
     await persistence.createWithAssociations(data, [roomAssociationKey, messageAssociationKey, userAssociationKey, dayAssociationKey]);

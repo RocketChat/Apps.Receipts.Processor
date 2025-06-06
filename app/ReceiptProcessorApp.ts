@@ -59,7 +59,10 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         const userId = message.sender.id;
         const channelService = new ChannelService(persistence, read.getPersistenceReader());
 
-        const userChannels = await channelService.getChannels(userId);
+        const userChannels = await channelService.getChannels(userId, this.getLogger());
+        this.getLogger().info(`User channels for ${userId}:`, userChannels);
+        this.getLogger().info(`Current roomId: ${roomId}`);
+        this.getLogger().info(userChannels)
         if (!userChannels || !userChannels.includes(roomId)) {
             this.getLogger().info(`Room ${roomId} is not in user ${userId}'s channel list. Ignoring message.`);
             return;
@@ -68,6 +71,7 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         const appUser = await this.getAccessors().reader.getUserReader().getAppUser(this.getID())
         const imageProcessor = new ImageHandler(http, read)
         const isReceipt = await imageProcessor.validateImage(message)
+        this.getLogger().info("Receipt : ", isReceipt)
         const messageId = message.id
         const { modelType } = await getAPIConfig(read);
 
@@ -77,7 +81,7 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
                 const botHandler = new BotHandler(http, read)
                 const response = await imageProcessor.processImage(message, PromptLibrary.getPrompt(modelType, "RECEIPT_SCAN_PROMPT"))
                 const result = await receiptHandler.parseReceiptData(response, userId, messageId, message.room.id)
-
+                this.getLogger().info("Result : ", result)
                 if (result === INVALID_IMAGE_RESPONSE) {
                     sendMessage(modify, appUser, message.room, INVALID_IMAGE_RESPONSE);
                 } else {
@@ -96,7 +100,6 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
                             receiptDate: parsedResult.receiptDate
                         };
 
-                        //const botResponse = receiptHandler.convertReceiptDataToResponse(receiptData);
                         let question = await botHandler.processResponse(RECEIPT_PROCESSOR_RESPONSE_PROMPT("The user just uploaded photo of a receipt", result, "Ask the user if they want to save the data or not ?"));
                         sendMessage(modify, appUser, message.room, question);
                         await sendConfirmationButtons(modify, appUser, message.room, receiptData);

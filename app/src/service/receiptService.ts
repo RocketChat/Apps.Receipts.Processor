@@ -14,7 +14,7 @@ export class ReceiptService {
     }
 
     public async getReceiptsByUserAndRoom(userId : string, roomId: string) {
-        const userAssociationKey = Associations.withUser(userId)
+        const userAssociationKey = Associations.withUserReceipts(userId)
         const roomAssociationKey = Associations.withRoom(roomId)
 
         const receipts = await ReceiptRepository.getReceipts(this.persistenceRead, [userAssociationKey, roomAssociationKey])
