@@ -50,6 +50,7 @@ export class CommandUtility {
     }
 
     private showHelp(appUser: IUser): void {
+        const threadId = this.context.getThreadId()
         const helpMessage = `
         📝 **Receipt Command Help** 📝
 
@@ -58,14 +59,17 @@ export class CommandUtility {
         - \`/receipt room\` - Show all receipts in the current room
         - \`/receipt date YYYY-MM-DD\` - Show your receipts from a specific date
         - \`/receipt add_channel\` - Add this room to your channel list
+        - \`/receipt thread\` - Show all receipts in the current thread (must be used in a thread)
+        - \`/receipt thread_user\` - Show your receipts in the current thread (must be used in a thread)
         - \`/receipt help\` - Show this help message
         `;
-        sendMessage(this.modify, appUser, this.room, helpMessage);
+        sendMessage(this.modify, appUser, this.room, helpMessage, threadId);
     }
 
     public async execute() {
         try {
             const appUser = await this.getAppUser();
+            const threadId = this.context.getThreadId();
             if (!appUser) {
                 this.app.getLogger().error("App user not found");
                 return;
@@ -84,23 +88,23 @@ export class CommandUtility {
 
             switch (mainCommand) {
                 case "list":
-                    await this.receiptHandler.listReceiptDataByRoomAndUser(this.sender, this.room, appUser);
+                    await this.receiptHandler.listReceiptDataByRoomAndUser(this.sender, this.room, appUser, threadId);
                     break;
 
                 case "room":
-                    await this.receiptHandler.listReceiptDataByRoom(this.room, appUser);
+                    await this.receiptHandler.listReceiptDataByRoom(this.room, appUser, threadId);
                     break;
 
                 case "date":
                     if (commandLength < 2) {
-                        sendMessage(this.modify, appUser, this.room, "Please provide a date in YYYY-MM-DD format.");
+                        sendMessage(this.modify, appUser, this.room, "Please provide a date in YYYY-MM-DD format.", threadId);
                         return;
                     }
                     try {
                         const dateStr = this.command[1];
                         const date = new Date(dateStr);
                         if (isNaN(date.getTime())) {
-                            sendMessage(this.modify, appUser, this.room, "Invalid date format. Please use YYYY-MM-DD format.");
+                            sendMessage(this.modify, appUser, this.room, "Invalid date format. Please use YYYY-MM-DD format.", threadId);
                             return;
                         }
 
@@ -108,11 +112,12 @@ export class CommandUtility {
                             this.sender.id,
                             date,
                             this.room,
-                            appUser
+                            appUser,
+                            threadId
                         );
                     } catch (error) {
                         this.app.getLogger().error("Error processing date command:", error);
-                        sendMessage(this.modify, appUser, this.room, "Error processing date. Please use YYYY-MM-DD format.");
+                        sendMessage(this.modify, appUser, this.room, "Error processing date. Please use YYYY-MM-DD format.", threadId);
                     }
                     break;
 
@@ -128,7 +133,8 @@ export class CommandUtility {
                             this.modify,
                             appUser,
                             this.room,
-                            "✅ This channel has been added to your channel list."
+                            "✅ This channel has been added to your channel list.",
+                            threadId
                         );
                     } catch (error) {
                         this.app.getLogger().error("Error adding channel:", error);
@@ -136,29 +142,70 @@ export class CommandUtility {
                             this.modify,
                             appUser,
                             this.room,
-                            "❌ Failed to add this channel to your channel list."
+                            "❌ Failed to add this channel to your channel list.",
+                            threadId
                         );
                     }
+                    break;
+                case "thread":
+                    if (!this.context.getThreadId()) {
+                        sendMessage(
+                            this.modify,
+                            appUser,
+                            this.room,
+                            "❗ This command can only be used inside a thread.",
+                            threadId
+                        );
+                        return;
+                    }
+                    await this.receiptHandler.listReceiptDataByThread(
+                        this.context.getThreadId()!,
+                        this.room,
+                        appUser,
+                        this.app.getLogger()
+                    );
+                    break;
+
+                case "thread_user":
+                    if (!this.context.getThreadId()) {
+                        sendMessage(
+                            this.modify,
+                            appUser,
+                            this.room,
+                            "❗ This command can only be used inside a thread.",
+                            threadId
+                        );
+                        return;
+                    }
+                    await this.receiptHandler.listReceiptDataByThreadAndUser(
+                        this.context.getThreadId()!,
+                        this.sender.id,
+                        this.room,
+                        appUser
+                    );
                     break;
                 default:
                     sendMessage(
                         this.modify,
                         appUser,
                         this.room,
-                        `Unknown command: ${mainCommand}. Type \`/receipt help\` for available commands.`
+                        `Unknown command: ${mainCommand}. Type \`/receipt help\` for available commands.`,
+                        threadId
                     );
                     break;
             }
         } catch (error) {
             this.app.getLogger().error("Error in CommandUtility.execute:", error);
-
             const appUser = await this.getAppUser();
+            const threadId = this.context.getThreadId();
+
             if (appUser) {
                 sendMessage(
                     this.modify,
                     appUser,
                     this.room,
-                    "An error occurred while processing your command. Please try again."
+                    "An error occurred while processing your command. Please try again.",
+                    threadId
                 );
             }
         }

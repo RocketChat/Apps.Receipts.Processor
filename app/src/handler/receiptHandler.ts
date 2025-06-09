@@ -1,7 +1,8 @@
 import {
     IModify,
     IPersistence,
-    IPersistenceRead
+    IPersistenceRead,
+    ILogger
 } from '@rocket.chat/apps-engine/definition/accessors';
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
@@ -27,6 +28,7 @@ export class ReceiptHandler {
     const receiptData: IReceiptData = {
         userId: parsedData.userId,
         messageId: parsedData.messageId,
+        threadId: parsedData.threadId,
         roomId: parsedData.roomId,
         items: parsedData.items.map((item: any): IReceiptItem => ({
           name: item.name,
@@ -47,7 +49,8 @@ export class ReceiptHandler {
     data: string,
     userId: string,
     messageId: string,
-    roomId: string
+    roomId: string,
+    threadId: string | undefined
   ): Promise<string> {
     try {
       const parsedData = JSON.parse(data);
@@ -61,6 +64,7 @@ export class ReceiptHandler {
         userId,
         messageId,
         roomId,
+        threadId,
         items: parsedData.items.map((item: any): IReceiptItem => ({
           name: item.name,
           price: item.price,
@@ -140,55 +144,61 @@ export class ReceiptHandler {
     receipts: IReceiptData[] | null,
     room: IRoom,
     appUser: IUser,
-    emptyMessage: string
+    emptyMessage: string,
+    threadId: string | undefined
   ): Promise<void> {
     if (!receipts || receipts.length === 0) {
       await sendMessage(
         this.modify,
         appUser,
         room,
-        emptyMessage
+        emptyMessage,
+        threadId
       );
       return;
     }
 
     const summary = this.formatReceiptsSummary(receipts);
-    await sendMessage(this.modify, appUser, room, summary);
+    await sendMessage(this.modify, appUser, room, summary, threadId);
   }
 
   public async listReceiptDataByRoomAndUser(
     sender: IUser,
     room: IRoom,
-    appUser: IUser
+    appUser: IUser,
+    threadId: string | undefined
   ): Promise<void> {
     try {
       const receipts = await this.receiptService.getReceiptsByUserAndRoom(sender.id, room.id);
-      await this.displayReceipts(receipts, room, appUser, EMPTY_ROOM_RECEIPTS_RESPONSE);
+      await this.displayReceipts(receipts, room, appUser, EMPTY_ROOM_RECEIPTS_RESPONSE, threadId);
     } catch (error) {
       console.error('Error listing receipts:', error);
       await sendMessage(
         this.modify,
         appUser,
         room,
-        FAILED_GET_RECEIPTS_RESPONSE
+        FAILED_GET_RECEIPTS_RESPONSE,
+        threadId
       );
     }
   }
 
   public async listReceiptDataByRoom(
     room: IRoom,
-    appUser: IUser
+    appUser: IUser,
+    threadId: string | undefined
   ): Promise<void> {
     try {
       const receipts = await this.receiptService.getReceiptsByRoom(room.id);
-      await this.displayReceipts(receipts, room, appUser, "No receipts found in this room.");
+      await this.displayReceipts(receipts, room, appUser, "No receipts found in this room.", threadId);
     } catch (error) {
       console.error('Error listing room receipts:', error);
       await sendMessage(
         this.modify,
         appUser,
         room,
-        FAILED_GET_RECEIPTS_RESPONSE
+        FAILED_GET_RECEIPTS_RESPONSE,
+        threadId
       );
     }
   }
@@ -197,18 +207,63 @@ export class ReceiptHandler {
     userId: string,
     date: Date,
     room: IRoom,
-    appUser: IUser
+    appUser: IUser,
+    threadId: string | undefined
   ): Promise<void> {
     try {
       const receipts = await this.receiptService.getReceiptsByUserAndUploadedDate(userId, date);
-      await this.displayReceipts(receipts, room, appUser, "No receipts found for this date.");
+      await this.displayReceipts(receipts, room, appUser, "No receipts found for this date.", threadId);
     } catch (error) {
       console.error('Error listing user date receipts:', error);
       await sendMessage(
         this.modify,
         appUser,
         room,
-        FAILED_GET_RECEIPTS_RESPONSE
+        FAILED_GET_RECEIPTS_RESPONSE,
+        threadId
+      );
+    }
+  }
+
+  public async listReceiptDataByThread(
+    threadId: string,
+    room: IRoom,
+    appUser: IUser,
+    logger: ILogger
+  ) : Promise<void> {
+    try {
+      const receipts = await this.receiptService.getReceiptsByThread(room.id, threadId);
+      logger.info("Receipts : ", receipts)
+      await this.displayReceipts(receipts, room, appUser, "No receipts found for this thread.", threadId);
+    } catch (error) {
+      console.error('Error listing user date receipts:', error);
+      await sendMessage(
+        this.modify,
+        appUser,
+        room,
+        FAILED_GET_RECEIPTS_RESPONSE,
+        threadId
+      );
+    }
+  }
+
+  public async listReceiptDataByThreadAndUser(
+    userId: string,
+    threadId: string,
+    room: IRoom,
+    appUser: IUser
+  ) : Promise<void> {
+    try {
+      const receipts = await this.receiptService.getReceiptsByThreadAndUser(room.id, threadId, userId);
+      await this.displayReceipts(receipts, room, appUser, "No receipts found for this thread.", threadId);
+    } catch (error) {
+      console.error('Error listing user date receipts:', error);
+      await sendMessage(
+        this.modify,
+        appUser,
+        room,
+        FAILED_GET_RECEIPTS_RESPONSE,
+        threadId
       );
     }
   }

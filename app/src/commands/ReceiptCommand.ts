@@ -93,7 +93,19 @@ export class ReceiptCommand implements ISlashCommand {
                     type: SlashCommandPreviewItemType.TEXT,
                     value: "add_channel",
                     i18nTitle: "receipt_add_channel_command",
-                }
+                },
+                {
+                    id: "thread",
+                    type: SlashCommandPreviewItemType.TEXT,
+                    value: "thread",
+                    i18nTitle: "receipt_thread_command",
+                },
+                {
+                    id: "thread_user",
+                    type: SlashCommandPreviewItemType.TEXT,
+                    value: "thread_user",
+                    i18nTitle: "receipt_thread_user_command",
+                },
             ];
             const filteredCommands = commands.filter((cmd) =>
                 cmd.value.startsWith(currentArg)

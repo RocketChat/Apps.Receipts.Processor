@@ -42,10 +42,10 @@ export class Associations {
         );
     }
 
-    public static withCustomKey(key: string): RocketChatAssociationRecord {
+    public static withThread(threadId: string): RocketChatAssociationRecord {
         return new RocketChatAssociationRecord(
             RocketChatAssociationModel.MISC,
-            key
+            `thread:${threadId}`
         );
     }
 }

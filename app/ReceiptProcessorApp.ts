@@ -73,6 +73,7 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         const isReceipt = await imageProcessor.validateImage(message)
         this.getLogger().info("Receipt : ", isReceipt)
         const messageId = message.id
+        const threadId = message.threadId
         const { modelType } = await getAPIConfig(read);
 
         if (appUser) {
@@ -80,10 +81,10 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
                 const receiptHandler = new ReceiptHandler(persistence, read.getPersistenceReader(), modify)
                 const botHandler = new BotHandler(http, read)
                 const response = await imageProcessor.processImage(message, PromptLibrary.getPrompt(modelType, "RECEIPT_SCAN_PROMPT"))
-                const result = await receiptHandler.parseReceiptData(response, userId, messageId, message.room.id)
+                const result = await receiptHandler.parseReceiptData(response, userId, messageId, message.room.id, threadId)
                 this.getLogger().info("Result : ", result)
                 if (result === INVALID_IMAGE_RESPONSE) {
-                    sendMessage(modify, appUser, message.room, INVALID_IMAGE_RESPONSE);
+                    sendMessage(modify, appUser, message.room, INVALID_IMAGE_RESPONSE, threadId);
                 } else {
                     try {
                         this.getLogger().info(result)
@@ -92,6 +93,7 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
                         const receiptData: IReceiptData = {
                             userId,
                             messageId,
+                            threadId,
                             roomId: message.room.id,
                             items: parsedResult.items as IReceiptItem[],
                             extraFee: parsedResult.extraFee,
@@ -101,15 +103,15 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
                         };
 
                         let question = await botHandler.processResponse(RECEIPT_PROCESSOR_RESPONSE_PROMPT("The user just uploaded photo of a receipt", result, "Ask the user if they want to save the data or not ?"));
-                        sendMessage(modify, appUser, message.room, question);
+                        await sendMessage(modify, appUser, message.room, question, threadId);
                         await sendConfirmationButtons(modify, appUser, message.room, receiptData);
                     } catch (error) {
                         this.getLogger().error("Failed to parse receipt data for human-readable output:", error);
-                        sendMessage(modify, appUser, message.room, GENERAL_ERROR_RESPONSE)
+                        sendMessage(modify, appUser, message.room, GENERAL_ERROR_RESPONSE, threadId);
                     }
                 }
             } else {
-                sendMessage(modify, appUser, message.room, INVALID_IMAGE_RESPONSE);
+                sendMessage(modify, appUser, message.room, INVALID_IMAGE_RESPONSE, threadId);
             }
         } else {
             this.getLogger().error("App user not found. Message not sent.")
@@ -126,20 +128,28 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         const data = context.getInteractionData();
         const appUser = await read.getUserReader().getAppUser();
         const receiptHandler = new ReceiptHandler(persistence, read.getPersistenceReader(), modify)
-
+        this.getLogger().info("Thread ID : ", data.threadId)
+        const receiptData = data.value ? JSON.parse(data.value) : undefined;
         if (data.actionId === 'confirm-save-receipt' && appUser) {
-            const receiptData = data.value ? JSON.parse(data.value) : undefined;
             await receiptHandler.addReceiptData(receiptData)
             const builder = modify.getCreator().startMessage()
                 .setSender(appUser)
                 .setRoom(data.room!)
                 .setText(SUCCESSFUL_IMAGE_DETECTION_RESPONSE);
+
+            if(receiptData.threadId) {
+                builder.setThreadId(receiptData.threadId)
+            }
             await modify.getCreator().finish(builder);
         } else if (data.actionId === 'cancel-save-receipt' && appUser) {
             const builder = modify.getCreator().startMessage()
                 .setSender(appUser)
                 .setRoom(data.room!)
                 .setText('Receipt saving cancelled.');
+
+            if(receiptData.threadId) {
+                builder.setThreadId(receiptData.threadId)
+            }
             await modify.getCreator().finish(builder);
         }
 

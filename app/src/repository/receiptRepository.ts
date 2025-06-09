@@ -12,18 +12,24 @@ export const addReceipt = async (
     persistence: IPersistence,
     data: IReceiptData
 ): Promise<void> => {
-    const roomAssociationKey = Associations.withRoom(data.roomId)
-    const messageAssociationKey = Associations.withMessage(data.messageId)
-    const userAssociationKey = Associations.withUserReceipts(data.userId)
-    const dayAssociationKey = Associations.withDate(data.uploadedDate)
+    const associations: RocketChatAssociationRecord[] = [
+        Associations.withRoom(data.roomId),
+        Associations.withMessage(data.messageId),
+        Associations.withUserReceipts(data.userId),
+        Associations.withDate(data.uploadedDate),
+    ];
 
-    await persistence.createWithAssociations(data, [roomAssociationKey, messageAssociationKey, userAssociationKey, dayAssociationKey]);
+    if (data.threadId) {
+        associations.push(Associations.withThread(data.threadId));
+    }
+
+    await persistence.createWithAssociations(data, associations);
 };
 
 export const getReceipts = async (
     persistance: IPersistenceRead,
-    assocations: RocketChatAssociationRecord[]
+    associations: RocketChatAssociationRecord[]
 ) => {
-    const records = await persistance.readByAssociations(assocations)
+    const records = await persistance.readByAssociations(associations)
     return records as IReceiptData[]
 }
