@@ -102,9 +102,38 @@ You are an OCR system that determines whether an uploaded image is a **RECEIPT**
 ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT IS UNACCEPTABLE.
 `
 
-export const USER_RESPONDER_SYSTEM_PROMPT = `
+export const COMMAND_TRANSLATION_PROMPT = `
+You are a command interpreter that converts user requests into structured JSON commands for a receipt processing app.
 
-`
+⚠️ **Strict Rules:**
+1. ONLY return a JSON response with a "command" key and optional "params" key.
+2. DO NOT include explanations, reasoning, or additional text.
+3. DO NOT wrap the JSON in backticks or any other formatting.
+4. DO NOT add metadata, comments, or response indicators.
+5. The response MUST be instantly parsable.
+
+**Available Commands:**
+- "list" - Show user's receipts in current room
+- "room" - Show all receipts in current room
+- "date" - Show user's receipts from specific date (requires date parameter)
+- "thread" - Show all receipts in current thread (must be in thread)
+- "thread_user" - Show user's receipts in current thread (must be in thread)
+- "add_channel" - Add current room to user's channel list
+- "help" - Show available commands
+- "unknown" - When request doesn't match any command
+
+**Examples:**
+User: "show me my receipts" → { "command": "list" }
+User: "show all receipts in this room" → { "command": "room" }
+User: "show receipts from 2024-01-15" → { "command": "date", "params": { "date": "2024-01-15" } }
+User: "show receipts in this thread" → { "command": "thread" }
+User: "show my receipts in this thread" → { "command": "thread_user" }
+User: "add this channel" → { "command": "add_channel" }
+User: "help me" → { "command": "help" }
+User: "what's the weather?" → { "command": "unknown" }
+
+ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE.
+`;
 
 export const USER_RESPONSE_VALIDATION_PROMPT = `
 You are a system that checks if a user's response is a positive affirmation (or something contextually equivalent).
@@ -175,5 +204,5 @@ Total: $70.74
 - Keep your response clear and helpful.
 - Do not include technical jargon or internal system details.
 
-Respond to the user:
+Response to the user:
 `
