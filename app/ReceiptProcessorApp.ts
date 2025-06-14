@@ -12,7 +12,7 @@ import { IAppInfo } from '@rocket.chat/apps-engine/definition/metadata';
 import { IMessage, IPostMessageSent } from "@rocket.chat/apps-engine/definition/messages";
 import { getAPIConfig, settings } from './src/config/settings';
 import { sendMessage, sendConfirmationButtons } from "./src/utils/message";
-import { GENERAL_ERROR_RESPONSE, INVALID_IMAGE_RESPONSE, SUCCESSFUL_IMAGE_DETECTION_RESPONSE } from './src/const/response';
+import { GENERAL_ERROR_RESPONSE, INVALID_IMAGE_RESPONSE, SUCCESSFUL_IMAGE_DETECTION_RESPONSE, PROCESSING_IMAGE_RESPONSE } from './src/const/response';
 import { ReceiptCommand } from './src/commands/ReceiptCommand';
 import { ImageHandler } from "./src/handler/imageHandler";
 import { ReceiptHandler } from './src/handler/receiptHandler';
@@ -178,10 +178,10 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         const threadId = message.threadId;
         const userId = message.sender.id;
         const { modelType } = await getAPIConfig(read);
-
         if (isReceipt && messageId) {
             const receiptHandler = new ReceiptHandler(persistence, read.getPersistenceReader(), modify);
             const botHandler = new BotHandler(http, read);
+            await sendMessage(modify, appUser, message.room, PROCESSING_IMAGE_RESPONSE, threadId);
             const response = await imageProcessor.processImage(message, PromptLibrary.getPrompt(modelType, "RECEIPT_SCAN_PROMPT"));
             const result = await receiptHandler.parseReceiptData(response, userId, messageId, message.room.id, threadId);
 
@@ -200,7 +200,7 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
                         items: parsedResult.items as IReceiptItem[],
                         extraFee: parsedResult.extraFee,
                         totalPrice: parsedResult.totalPrice,
-                        uploadedDate: new Date(),
+                        uploadedDate: parsedResult.uploadedDate,
                         receiptDate: parsedResult.receiptDate
                     };
 
@@ -232,6 +232,7 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         persistence: IPersistence,
         modify: IModify
     ): Promise<void> {
+        const appUser = await read.getUserReader().getAppUser();
         try {
             this.getLogger().info(`Processing text command: "${messageText}"`);
             const botHandler = new BotHandler(http, read);
@@ -242,7 +243,6 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
             this.getLogger().info('Command JSON:', commandJson);
             const parsedCommand = JSON.parse(commandJson);
             const params = parsedCommand.params || this.extractParams(messageText);
-
             if (this.commandHandler) {
                 await this.commandHandler.executeCommand(
                     parsedCommand.command,
@@ -254,7 +254,6 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
             }
         } catch (error) {
             this.getLogger().error('Error processing text command:', error);
-
             if (this.commandHandler) {
                 await this.commandHandler.executeCommand(
                     'help',

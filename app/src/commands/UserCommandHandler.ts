@@ -1,21 +1,51 @@
 import {
     IRead,
     IModify,
-    IPersistence
+    IPersistence,
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { ReceiptProcessorApp } from "../../ReceiptProcessorApp";
 import { ReceiptHandler } from "../handler/receiptHandler";
-import { ChannelService } from '../service/channelService';
-import { sendMessage } from '../utils/message';
+import { ChannelService } from "../service/channelService";
+import { sendMessage } from "../utils/message";
 import { CommandParams, CommandResult } from "../types/command";
+
+function parseDateString(dateStr: string): string | undefined {
+    if (!dateStr) return undefined;
+    const today = new Date();
+    switch (dateStr.toLowerCase()) {
+        case "today":
+            return today.toISOString().split("T")[0];
+        case "yesterday":
+        case "previous day":
+            {
+                const yesterday = new Date(today);
+                yesterday.setDate(yesterday.getDate() - 1);
+                return yesterday.toISOString().split("T")[0];
+            }
+        case "tomorrow":
+            {
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                return tomorrow.toISOString().split("T")[0];
+            }
+        default:
+            // Normalize slashes to dashes
+            const normalized = dateStr.replace(/\//g, "-");
+            // If it's now in YYYY-MM-DD format, return as is
+            if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+                return normalized;
+            }
+            return undefined;
+    }
+}
 
 export class CommandHandler {
     private receiptHandler: ReceiptHandler;
     private channelService: ChannelService;
     private app: ReceiptProcessorApp;
-    private appUser: IUser
+    private appUser: IUser;
 
     constructor(
         private readonly read: IRead,
@@ -34,7 +64,7 @@ export class CommandHandler {
             this.persistence,
             this.read.getPersistenceReader()
         );
-        this.appUser = appUser
+        this.appUser = appUser;
     }
 
     public async executeCommand(
@@ -49,53 +79,85 @@ export class CommandHandler {
             if (!appUser) {
                 return {
                     success: false,
-                    message: "App user not found for sending messages"
+                    message: "App user not found for sending messages",
                 };
             }
 
             this.app.getLogger().info(`Executing command: ${command}`, params);
 
             switch (command) {
-                case 'list':
-                    return await this.listReceiptsByUser(user, room, appUser, threadId);
+                case "list":
+                    return await this.listReceiptsByUser(
+                        user,
+                        room,
+                        appUser,
+                        threadId
+                    );
 
-                case 'room':
+                case "room":
                     return await this.listReceiptsByRoom(room, appUser, threadId);
 
-                case 'date':
-                    return await this.listReceiptsByDate(user, room, appUser, params?.date, threadId);
+                case "date":
+                    return await this.listReceiptsByDate(
+                        user,
+                        room,
+                        appUser,
+                        params?.date,
+                        threadId
+                    );
 
-                case 'thread':
-                    return await this.listReceiptsInThread(room, appUser, threadId);
+                case "thread":
+                    return await this.listReceiptsInThread(
+                        room,
+                        appUser,
+                        threadId
+                    );
 
-                case 'thread_user':
-                    return await this.listReceiptsInThreadByUser(user, room, appUser, threadId);
+                case "thread_user":
+                    return await this.listReceiptsInThreadByUser(
+                        user,
+                        room,
+                        appUser,
+                        threadId
+                    );
 
-                case 'add_channel':
-                    return await this.addChannel(room, user, appUser, threadId);
+                case "add_channel":
+                    return await this.addChannel(
+                        room,
+                        user,
+                        appUser,
+                        threadId
+                    );
 
-                case 'help':
+                case "help":
                     return await this.showHelp(appUser, room, threadId);
 
-                case 'unknown':
-                    return await this.handleUnknownCommand(appUser, room, threadId);
-
+                case "unknown":
                 default:
-                    return await this.handleUnknownCommand(appUser, room, threadId);
+                    return await this.handleUnknownCommand(
+                        appUser,
+                        room,
+                        threadId
+                    );
             }
         } catch (error) {
-            this.app.getLogger().error('Error executing command:', error);
+            this.app.getLogger().error("Error executing command:", error);
             return {
                 success: false,
-                message: "An error occurred while processing your command. Please try again."
+                message:
+                    "An error occurred while processing your command. Please try again.",
             };
         }
     }
 
     private async getAppUser(): Promise<IUser | undefined> {
-        const appUser = await this.read.getUserReader().getAppUser(this.app.getID());
+        const appUser = await this.read
+            .getUserReader()
+            .getAppUser(this.app.getID());
         if (!appUser) {
-            this.app.getLogger().error("App user not found for sending messages");
+            this.app
+                .getLogger()
+                .error("App user not found for sending messages");
             return undefined;
         }
         return appUser;
@@ -108,10 +170,17 @@ export class CommandHandler {
         threadId?: string
     ): Promise<CommandResult> {
         try {
-            await this.receiptHandler.listReceiptDataByRoomAndUser(user, room, appUser, threadId);
+            await this.receiptHandler.listReceiptDataByRoomAndUser(
+                user,
+                room,
+                appUser,
+                threadId
+            );
             return { success: true };
         } catch (error) {
-            this.app.getLogger().error('Error listing receipts by user:', error);
+            this.app
+                .getLogger()
+                .error("Error listing receipts by user:", error);
             sendMessage(
                 this.modify,
                 appUser,
@@ -129,10 +198,16 @@ export class CommandHandler {
         threadId?: string
     ): Promise<CommandResult> {
         try {
-            await this.receiptHandler.listReceiptDataByRoom(room, appUser, threadId);
+            await this.receiptHandler.listReceiptDataByRoom(
+                room,
+                appUser,
+                threadId
+            );
             return { success: true };
         } catch (error) {
-            this.app.getLogger().error('Error listing receipts by room:', error);
+            this.app
+                .getLogger()
+                .error("Error listing receipts by room:", error);
             sendMessage(
                 this.modify,
                 appUser,
@@ -162,8 +237,21 @@ export class CommandHandler {
             return { success: false };
         }
 
+        // Parse and normalize the date string
+        const parsedDateStr = parseDateString(dateStr);
+        if (!parsedDateStr) {
+            sendMessage(
+                this.modify,
+                appUser,
+                room,
+                "Invalid date format. Please use YYYY-MM-DD, 'today', or 'yesterday'.",
+                threadId
+            );
+            return { success: false };
+        }
+
         try {
-            const date = new Date(dateStr);
+            const date = new Date(parsedDateStr);
             if (isNaN(date.getTime())) {
                 sendMessage(
                     this.modify,
@@ -176,8 +264,7 @@ export class CommandHandler {
             }
 
             await this.receiptHandler.listReceiptDataByUserAndUploadDate(
-                user.id,
-                date,
+                parsedDateStr,
                 room,
                 appUser,
                 threadId
@@ -221,7 +308,9 @@ export class CommandHandler {
             );
             return { success: true };
         } catch (error) {
-            this.app.getLogger().error('Error listing receipts in thread:', error);
+            this.app
+                .getLogger()
+                .error("Error listing receipts in thread:", error);
             sendMessage(
                 this.modify,
                 appUser,
@@ -259,7 +348,9 @@ export class CommandHandler {
             );
             return { success: true };
         } catch (error) {
-            this.app.getLogger().error('Error listing user receipts in thread:', error);
+            this.app
+                .getLogger()
+                .error("Error listing user receipts in thread:", error);
             sendMessage(
                 this.modify,
                 appUser,
@@ -281,7 +372,11 @@ export class CommandHandler {
             this.app.getLogger().info("Room id:", room.id);
             this.app.getLogger().info("User id:", user.id);
 
-            await this.channelService.addChannel(room.id, user.id, this.app.getLogger());
+            await this.channelService.addChannel(
+                room.id,
+                user.id,
+                this.app.getLogger()
+            );
             sendMessage(
                 this.modify,
                 appUser,
@@ -303,29 +398,43 @@ export class CommandHandler {
         }
     }
 
-    private async showHelp(appUser: IUser, room: IRoom, threadId?: string): Promise<CommandResult> {
+    private async showHelp(
+        appUser: IUser,
+        room: IRoom,
+        threadId?: string
+    ): Promise<CommandResult> {
         const helpMessage = `
-        📝 **Receipt Command Help** 📝
+📝 **Receipt Command Help** 📝
 
-        **How to use:** Mention me with your request like \`@${this.appUser.name} help\`
+**How to use:** Mention me with your request like \`@${this.appUser.name} help\`
 
-        Available commands:
-        - **Show my receipts** - "@bot show me my receipts" / "@bot list my receipts"
-        - **Show room receipts** - "@bot show all receipts in this room" / "@bot room receipts"
-        - **Show receipts by date** - "@bot show receipts from 2024-01-15" / "@bot receipts from yesterday"
-        - **Show thread receipts** - "@bot show receipts in this thread" (must be in thread)
-        - **Show my thread receipts** - "@bot show my receipts in this thread" (must be in thread)
-        - **Add channel** - "@bot add this channel to my list" / "@bot subscribe to this room"
-        - **Help** - "@bot help" / "@bot what can you do?"
+Available commands:
+- **Show my receipts** - "@bot show me my receipts" / "@bot list my receipts"
+- **Show room receipts** - "@bot show all receipts in this room" / "@bot room receipts"
+- **Show receipts by date** - "@bot show receipts from 2024-01-15" / "@bot receipts from yesterday"
+- **Show thread receipts** - "@bot show receipts in this thread" (must be in thread)
+- **Show my thread receipts** - "@bot show my receipts in this thread" (must be in thread)
+- **Add channel** - "@bot add this channel to my list" / "@bot subscribe to this room"
+- **Help** - "@bot help" / "@bot what can you do?"
 
-        **Note:** You can upload receipt images without mentioning me - I'll process them automatically!
+**Note:** You can upload receipt images without mentioning me - I'll process them automatically!
         `;
 
-        sendMessage(this.modify, appUser, room, helpMessage.trim(), threadId);
+        sendMessage(
+            this.modify,
+            appUser,
+            room,
+            helpMessage.trim(),
+            threadId
+        );
         return { success: true };
     }
 
-    private async handleUnknownCommand(appUser: IUser, room: IRoom, threadId?: string): Promise<CommandResult> {
+    private async handleUnknownCommand(
+        appUser: IUser,
+        room: IRoom,
+        threadId?: string
+    ): Promise<CommandResult> {
         sendMessage(
             this.modify,
             appUser,

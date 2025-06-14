@@ -10,6 +10,7 @@ import { IReceiptData, IReceiptItem } from "../types/receipt";
 import { EMPTY_ROOM_RECEIPTS_RESPONSE, FAILED_GET_RECEIPTS_RESPONSE, INVALID_IMAGE_RESPONSE } from '../const/response';
 import { sendMessage } from '../utils/message';
 import { ReceiptService } from '../service/receiptService';
+import { toDateString } from "../utils/date"
 
 export class ReceiptHandler {
   constructor(
@@ -25,6 +26,9 @@ export class ReceiptHandler {
   public async addReceiptData(
     parsedData: IReceiptData,
   ) : Promise<void> {
+   const uploadedDate = parsedData.uploadedDate
+    ? toDateString(parsedData.uploadedDate)
+    : new Date().toISOString().slice(0, 10);
     const receiptData: IReceiptData = {
         userId: parsedData.userId,
         messageId: parsedData.messageId,
@@ -37,7 +41,7 @@ export class ReceiptHandler {
         })),
         extraFee: parsedData.extraFee,
         totalPrice: parsedData.totalPrice,
-        uploadedDate: new Date(),
+        uploadedDate: uploadedDate,
         receiptDate: parsedData.receiptDate || ""
     };
 
@@ -72,7 +76,7 @@ export class ReceiptHandler {
         })),
         extraFee: parsedData.extra_fees,
         totalPrice: parsedData.total_price,
-        uploadedDate: new Date(),
+        uploadedDate: toDateString(new Date()),
         receiptDate: ""
       };
 
@@ -86,34 +90,12 @@ export class ReceiptHandler {
     }
   }
 
-  public convertReceiptDataToResponse(receiptData: IReceiptData): string {
-    let response = `📝 *Your Receipt Summary*\n\n`;
-    response += "*Date:* " + receiptData.receiptDate + "\n"
-    response += "*Items:*\n";
-    receiptData.items.forEach((item) => {
-      const itemTotal = (item.price * item.quantity).toFixed(2);
-      if (item.quantity > 1) {
-        response += `• ${item.name} (${item.quantity} x $${(item.price / item.quantity).toFixed(2)}) - $${itemTotal}\n`;
-      } else {
-        response += `• ${item.name} - $${itemTotal}\n`;
-      }
-    });
-    response += `\n*Extra Fees:* $${receiptData.extraFee.toFixed(2)}\n`;
-    response += `*Total:* $${receiptData.totalPrice.toFixed(2)}`;
-
-    return response;
-  }
-
   private formatReceiptsSummary(receipts: IReceiptData[]): string {
     let receiptTotalPrice = 0;
     let summary = `📋 *Your Receipts (${receipts.length})* 📋\n\n`;
 
     receipts.forEach((receipt, index) => {
-      const date = new Date(receipt.uploadedDate).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
+      const date = receipt.uploadedDate;
 
       const totalPrice = receipt.totalPrice.toFixed(2);
       receiptTotalPrice += receipt.totalPrice;
@@ -204,14 +186,13 @@ export class ReceiptHandler {
   }
 
   public async listReceiptDataByUserAndUploadDate(
-    userId: string,
-    date: Date,
+    date: string,
     room: IRoom,
     appUser: IUser,
     threadId: string | undefined
   ): Promise<void> {
     try {
-      const receipts = await this.receiptService.getReceiptsByUserAndUploadedDate(userId, date);
+      const receipts = await this.receiptService.getReceiptsByUserAndUploadedDate(room.id, date);
       await this.displayReceipts(receipts, room, appUser, "No receipts found for this date.", threadId);
     } catch (error) {
       console.error('Error listing user date receipts:', error);

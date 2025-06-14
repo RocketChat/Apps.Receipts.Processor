@@ -12,6 +12,6 @@ export interface IReceiptData {
     items: IReceiptItem[];
     extraFee: number;
     totalPrice: number;
-    uploadedDate: Date;
+    uploadedDate: string;
     receiptDate: string;
 }

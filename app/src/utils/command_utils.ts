@@ -102,15 +102,9 @@ public async execute() {
                 }
                 try {
                     const dateStr = this.command[1];
-                    const date = new Date(dateStr);
-                    if (isNaN(date.getTime())) {
-                        sendMessage(this.modify, appUser, this.room, "Invalid date format. Please use YYYY-MM-DD format.", threadId);
-                        return;
-                    }
 
                     await this.receiptHandler.listReceiptDataByUserAndUploadDate(
-                        this.sender.id,
-                        date,
+                        dateStr,
                         this.room,
                         appUser,
                         threadId
