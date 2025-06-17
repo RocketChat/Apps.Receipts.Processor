@@ -9,6 +9,7 @@ export async function sendMessage(
 	user: IUser,
 	room: IRoom,
 	message: string,
+    threadId: string | undefined
 ): Promise<void> {
 	const messageBuilder = modify
 		.getCreator()
@@ -19,6 +20,10 @@ export async function sendMessage(
 	if (message) {
 		messageBuilder.setText(message);
 	}
+
+    if (threadId) {
+        messageBuilder.setThreadId(threadId)
+    }
 
 	await modify.getCreator().finish(messageBuilder);
 	return;
@@ -34,6 +39,10 @@ export async function sendConfirmationButtons(
         .setSender(user)
         .setRoom(room)
         .setText('Are you sure you want to save this receipt data?');
+
+    if (receiptData.threadId) {
+        builder.setThreadId(receiptData.threadId)
+    }
 
     const block = modify.getCreator().getBlockBuilder();
 

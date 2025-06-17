@@ -2,7 +2,6 @@ import {
     RocketChatAssociationModel,
     RocketChatAssociationRecord,
 } from "@rocket.chat/apps-engine/definition/metadata";
-import { convertDateFormat } from "./date";
 
 export class Associations {
     public static withUserChannels(
@@ -35,17 +34,17 @@ export class Associations {
         );
     }
 
-    public static withDate(date: Date): RocketChatAssociationRecord {
+    public static withDate(date: string): RocketChatAssociationRecord {
         return new RocketChatAssociationRecord(
             RocketChatAssociationModel.MISC,
-            convertDateFormat(date)
+            date
         );
     }
 
-    public static withCustomKey(key: string): RocketChatAssociationRecord {
+    public static withThread(threadId: string): RocketChatAssociationRecord {
         return new RocketChatAssociationRecord(
             RocketChatAssociationModel.MISC,
-            key
+            `thread:${threadId}`
         );
     }
 }
