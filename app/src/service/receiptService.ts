@@ -28,8 +28,8 @@ export class ReceiptService {
         return receipts
     }
 
-    public async getReceiptsByUserAndUploadedDate(userId: string, uploadedDate: Date) {
-        const roomAssociationKey = Associations.withRoom(userId)
+    public async getReceiptsByUserAndUploadedDate(roomId: string, uploadedDate: string) {
+        const roomAssociationKey = Associations.withRoom(roomId)
         const dateAssociationKey = Associations.withDate(uploadedDate)
 
         const receipts = await ReceiptRepository.getReceipts(this.persistenceRead, [roomAssociationKey, dateAssociationKey])
