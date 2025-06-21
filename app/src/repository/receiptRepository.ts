@@ -33,3 +33,10 @@ export const getReceipts = async (
     const records = await persistance.readByAssociations(associations)
     return records as IReceiptData[]
 }
+
+export const deleteReceipt = async(
+    persistence: IPersistence,
+    associations: RocketChatAssociationRecord[]
+): Promise<void> => {
+    await persistence.removeByAssociations(associations)
+}

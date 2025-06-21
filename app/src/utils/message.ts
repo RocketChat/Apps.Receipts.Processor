@@ -67,6 +67,3 @@ export async function sendConfirmationButtons(
 
     await modify.getCreator().finish(builder);
 }
-
-
-

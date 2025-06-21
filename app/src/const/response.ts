@@ -15,3 +15,6 @@ export const FAILED_GET_RECEIPTS_RESPONSE =
 
 export const PROCESSING_IMAGE_RESPONSE =
 `Processing your image`
+
+export const INVALID_SETTINGS_RESPONSE =
+`It looks like some LLM settings are missing. Please fill in all required details.`
