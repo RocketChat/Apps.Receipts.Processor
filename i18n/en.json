@@ -1,8 +1,0 @@
-{
-    "receipt_commands": "Receipt Commands - list, room, date, help",
-    "receipt_command_description": "Process and manage receipt data",
-    "receipt_list_command": "List your receipts in the current room",
-    "receipt_room_command": "List all receipts in the current room",
-    "receipt_date_command": "List your receipts from a specific date",
-    "receipt_help_command": "Show help for receipt commands"
-}

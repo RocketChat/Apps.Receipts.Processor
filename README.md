@@ -10,7 +10,6 @@ We’ve all wasted hours squinting at crumpled receipts and battling spreadsheet
     <img width=60% src="https://github.com/user-attachments/assets/50c511e5-9e55-4618-95e6-a42720a41595">
 </div>
 
-
 <h2>Features 🚀</h2>
 <ul>
   <li>Scan and store expense data from receipt sent via images</li> 
@@ -44,14 +43,19 @@ git clone https://github.com/RocketChat/Apps.Receipts.Processor.git
 <li style="margin-bottom: 1rem;">Install app dependencies</li>
   
 ```
-cd Apps.Receipts.Processor
+cd Apps.Receipts.Processor/app
 yarn install
 ```
   
-  <li style="margin-bottom: 1rem;">Deploy the app to the server </li>
+  <li style="margin-bottom: 1rem;">Deploy the app to the rocket chat server </li>
   
   ```
+  cd app
   rc-apps deploy --url <server_url> --username <username> --password <password>
+  ```
+  or 
+  ```
+  make deploy url=<URL> username=<USERNAME> password=<PASSWORD>
   ```
   
   - If you are running the server locally, the default `server_url` is http://localhost:3000.
@@ -61,7 +65,10 @@ yarn install
 
 <h2>Usage 💬</h2>
 
--   **`/receipt list`**: Show list of receipt data in specific channel
+- **`/receipt list`**: Display all your receipt records.
+- **`/receipt room`**: Display your receipt records specific to the current room or channel.
+- **`/receipt date`**: Display your receipt records from the current room or channel within a specified date range.
+- **`/receipt help`**: Show all available receipt commands.
 
 <h2>🧑‍💻 Contributing</h2>
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.

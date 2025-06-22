@@ -7,10 +7,11 @@ export interface IReceiptItem {
 export interface IReceiptData {
     userId: string;
     messageId: string;
+    threadId?: string | null
     roomId : string;
     items: IReceiptItem[];
     extraFee: number;
     totalPrice: number;
-    uploadedDate: Date;
+    uploadedDate: string;
     receiptDate: string;
 }

@@ -20,3 +20,15 @@ export interface IExecutorProps {
     command: string[];
     context: SlashCommandContext;
 }
+
+export interface CommandResult {
+    success: boolean;
+    message?: string;
+    data?: any;
+}
+
+export interface CommandParams {
+    date?: string;
+    searchTerm?: string;
+    [key: string]: any;
+}

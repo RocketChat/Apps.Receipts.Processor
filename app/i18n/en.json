@@ -1,0 +1,12 @@
+{
+    "receipt_commands": "Receipt Command List",
+    "receipt_command_description": "Process and manage receipt data",
+    "receipt_list_command": "List your receipts in the current room",
+    "receipt_room_command": "List all receipts in the current room",
+    "receipt_date_command": "List your receipts from a specific date (YYYY-MM-DD)",
+    "receipt_help_command": "Show help for receipt commands",
+    "receipt_date_today": "Show receipts from today",
+    "receipt_date_yesterday": "Show receipts from yesterday",
+    "receipt_date_last_week": "Show receipts from last week",
+    "receipt_add_channel_command": "add_channel"
+}

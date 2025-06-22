@@ -13,7 +13,8 @@
     "classFile": "ReceiptProcessorApp.ts",
     "description": "App that will help to manage your spending based on the receipts",
     "implements": [
-        "IPostMessageSent"
+        "IPostMessageSent",
+        "IUIKitInteractionHandler"
     ],
     "permissions": [
         {

@@ -12,3 +12,6 @@ export const EMPTY_ROOM_RECEIPTS_RESPONSE =
 
 export const FAILED_GET_RECEIPTS_RESPONSE =
 `Sorry, there was an error retrieving your receipts.`
+
+export const PROCESSING_IMAGE_RESPONSE =
+`Processing your image`
