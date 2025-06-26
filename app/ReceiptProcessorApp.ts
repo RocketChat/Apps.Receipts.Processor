@@ -17,8 +17,7 @@ import { ReceiptCommand } from './src/commands/ReceiptCommand';
 import { ImageHandler } from "./src/handler/imageHandler";
 import { ReceiptHandler } from './src/handler/receiptHandler';
 import { IReceiptData, IReceiptItem } from './src/types/receipt';
-import { OCR_SYSTEM_PROMPT, RECEIPT_SCAN_PROMPT, RECEIPT_VALIDATION_PROMPT, USER_RESPONSE_VALIDATION_PROMPT, RECEIPT_PROCESSOR_RESPONSE_PROMPT, COMMAND_TRANSLATION_PROMPT } from "./src/const/prompt";
-import { modelStorage, PromptLibrary } from "./src/contrib/prompt-library/npm-module"
+import { RECEIPT_PROCESSOR_RESPONSE_PROMPT, COMMAND_TRANSLATION_PROMPT, RECEIPT_SCAN_PROMPT } from "./src/const/prompt";
 import {
     IUIKitInteractionHandler,
     UIKitBlockInteractionContext,
@@ -46,7 +45,6 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
             configuration.slashCommands.provideSlashCommand(
                 new ReceiptCommand(this)
             ),
-            this.initializePromptLibrary()
         ]);
     }
 
@@ -185,11 +183,10 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
             const receiptHandler = new ReceiptHandler(persistence, read.getPersistenceReader(), modify);
             const botHandler = new BotHandler(http, read);
             await sendMessage(modify, appUser, message.room, PROCESSING_IMAGE_RESPONSE, threadId);
-            const response = await imageProcessor.processImage(message, PromptLibrary.getPrompt(modelType, "RECEIPT_SCAN_PROMPT"));
+            const response = await imageProcessor.processImage(message, RECEIPT_SCAN_PROMPT);
             const result = await receiptHandler.parseReceiptData(response, userId, messageId, message.room.id, threadId);
 
             this.getLogger().info("Result:", result);
-
             if (result === INVALID_IMAGE_RESPONSE) {
                 await sendMessage(modify, appUser, message.room, INVALID_IMAGE_RESPONSE, threadId);
             } else {
@@ -218,7 +215,7 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
                     await sendMessage(modify, appUser, message.room, question, threadId);
                     await sendConfirmationButtons(modify, appUser, message.room, receiptData);
                 } catch (error) {
-                    this.getLogger().error("Failed to parse receipt data for human-readable output:", error);
+                    this.getLogger().info("Failed to parse receipt data for human-readable output:", error);
                     await sendMessage(modify, appUser, message.room, GENERAL_ERROR_RESPONSE, threadId);
                 }
             }
@@ -389,7 +386,7 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
             await modify.getCreator().finish(builder);
 
         } catch (error) {
-            this.getLogger().error("Error updating receipt list after deletion:", error);
+            this.getLogger().info("Error updating receipt list after deletion:", error);
             const builder = modify.getCreator().startMessage()
                 .setSender(appUser)
                 .setRoom(data.room!)
@@ -418,25 +415,5 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
 
         this.getLogger().info(`Has image: ${hasImageAttachment}, Bot mentioned: ${isBotMentioned}, Has command: ${hasReceiptCommand}`);
         return hasImageAttachment || hasReceiptCommand;
-    }
-
-    private initializePromptLibrary() {
-        modelStorage.initialize(
-            {
-                "OCR_SYSTEM_PROMPT": OCR_SYSTEM_PROMPT,
-                "RECEIPT_SCAN_PROMPT": RECEIPT_SCAN_PROMPT,
-                "RECEIPT_VALIDATION_PROMPT": RECEIPT_VALIDATION_PROMPT,
-                "USER_RESPONSE_VALIDATION_PROMPT": USER_RESPONSE_VALIDATION_PROMPT,
-                "COMMAND_TRANSLATION_PROMPT": COMMAND_TRANSLATION_PROMPT
-            },
-            [
-                {
-                    name: "meta-llama/Llama-3.2-11B-Vision-Instruct",
-                    parameters: "11B",
-                    quantization: "Vision",
-                    prompts: ["OCR_SYSTEM_PROMPT", "RECEIPT_SCAN_PROMPT", "RECEIPT_VALIDATION_PROMPT", "USER_RESPONSE_VALIDATION_PROMPT", "COMMAND_TRANSLATION_PROMPT"]
-                }
-            ]
-        );
     }
 }
