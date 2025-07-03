@@ -5,11 +5,12 @@ import {
 } from "@rocket.chat/apps-engine/definition/messages";
 import { getAPIConfig } from "../config/settings";
 import { OCR_SYSTEM_PROMPT, RECEIPT_VALIDATION_PROMPT } from "../const/prompt";
-import { LLMClient } from "./llmHandler";
+import { LLMClient } from "../prompt_library/client";
+import { ImageRequest } from "../prompt_library/const/types";
+import { getLLMConfigFromValues } from "../prompt_library/config";
 
 export class ImageHandler {
     private llmClient: LLMClient;
-
     constructor(private readonly http: IHttp, private readonly read: IRead) {
         this.llmClient = new LLMClient(http);
     }
@@ -19,18 +20,19 @@ export class ImageHandler {
             this.read
         );
         const base64Image = await this.convertImageToBase64(message);
-
-        return await this.llmClient.sendImageRequest(
+        const config = await getLLMConfigFromValues({
             provider,
-            apiEndpoint,
             apiKey,
             modelType,
-            {
-                systemPrompt: OCR_SYSTEM_PROMPT,
-                userPrompt: prompt,
-                base64Image,
-            }
-        );
+            apiEndpoint,
+        });
+        const request: ImageRequest = {
+            systemPrompt: OCR_SYSTEM_PROMPT,
+            userPrompt: prompt,
+            base64Image,
+        };
+
+        return await this.llmClient.sendImageRequest(config, request);
     }
 
     public async validateImage(message: IMessage): Promise<boolean> {

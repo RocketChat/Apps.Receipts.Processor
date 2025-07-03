@@ -27,9 +27,10 @@ import { ImageHandler } from "./src/handler/imageHandler";
 import { ReceiptHandler } from "./src/handler/receiptHandler";
 import { IReceiptData, IReceiptItem } from "./src/types/receipt";
 import {
-    RECEIPT_PROCESSOR_RESPONSE_PROMPT,
-    COMMAND_TRANSLATION_PROMPT,
+    RECEIPT_PROCESSOR_INSTRUCTIONS,
     RECEIPT_SCAN_PROMPT,
+    COMMAND_TRANSLATION_PROMPT_COMMANDS,
+    COMMAND_TRANSLATION_PROMPT_EXAMPLES
 } from "./src/const/prompt";
 import {
     IUIKitInteractionHandler,
@@ -39,6 +40,10 @@ import {
 import { BotHandler } from "./src/handler/botHandler";
 import { ChannelService } from "./src/service/channelService";
 import { CommandHandler } from "./src/commands/UserCommandHandler";
+import {
+    COMMAND_TRANSLATION_PROMPT,
+    RESPONSE_PROMPT
+} from "./src/prompt_library/const/prompt"
 
 export class ReceiptProcessorApp
     extends App
@@ -373,10 +378,11 @@ export class ReceiptProcessorApp
                     };
 
                     const question = await botHandler.processResponse(
-                        RECEIPT_PROCESSOR_RESPONSE_PROMPT(
+                        RESPONSE_PROMPT(
                             "The user just uploaded photo of a receipt",
                             result,
-                            "Ask the user if they want to save the data or not ?"
+                            "Ask the user if they want to save the data or not ?",
+                            RECEIPT_PROCESSOR_INSTRUCTIONS
                         )
                     );
 
@@ -429,9 +435,8 @@ export class ReceiptProcessorApp
         try {
             this.getLogger().info(`Processing text command: "${messageText}"`);
             const botHandler = new BotHandler(http, read);
-            const commandJson = await botHandler.processResponse(
-                `${COMMAND_TRANSLATION_PROMPT}\n\nUser message: "${messageText}"`
-            );
+            const commandTranslationPrompt = COMMAND_TRANSLATION_PROMPT(COMMAND_TRANSLATION_PROMPT_COMMANDS, COMMAND_TRANSLATION_PROMPT_EXAMPLES, messageText)
+            const commandJson = await botHandler.processResponse(commandTranslationPrompt);
 
             this.getLogger().info("Command JSON:", commandJson);
             const parsedCommand = JSON.parse(commandJson);

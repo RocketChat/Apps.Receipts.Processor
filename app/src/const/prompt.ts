@@ -102,16 +102,7 @@ You are an OCR system that determines whether an uploaded image is a **RECEIPT**
 ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT IS UNACCEPTABLE.
 `
 
-export const COMMAND_TRANSLATION_PROMPT = `
-You are a command interpreter that converts user requests into structured JSON commands for a receipt processing app.
-
-⚠️ **Strict Rules:**
-1. ONLY return a JSON response with a "command" key and optional "params" key.
-2. DO NOT include explanations, reasoning, or additional text.
-3. DO NOT wrap the JSON in backticks or any other formatting.
-4. DO NOT add metadata, comments, or response indicators.
-5. The response MUST be instantly parsable.
-
+export const COMMAND_TRANSLATION_PROMPT_COMMANDS = `
 **Available Commands:**
 - "list" - Show user's receipts in current room
 - "room" - Show all receipts in current room
@@ -121,7 +112,9 @@ You are a command interpreter that converts user requests into structured JSON c
 - "add_channel" - Add current room to user's channel list
 - "help" - Show available commands
 - "unknown" - When request doesn't match any command
+`
 
+export const COMMAND_TRANSLATION_PROMPT_EXAMPLES = `
 **Examples:**
 User: "show me my receipts" → { "command": "list" }
 User: "show all receipts in this room" → { "command": "room" }
@@ -131,59 +124,9 @@ User: "show my receipts in this thread" → { "command": "thread_user" }
 User: "add this channel" → { "command": "add_channel" }
 User: "help me" → { "command": "help" }
 User: "what's the weather?" → { "command": "unknown" }
-
-ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE.
-`;
-
-export const USER_RESPONSE_VALIDATION_PROMPT = `
-You are a system that checks if a user's response is a positive affirmation (or something contextually equivalent).
-
-⚠️ STRICT RULES:
-1. ONLY return a JSON response with a single boolean value.
-2. DO NOT include explanations, reasoning, or any additional text.
-3. DO NOT wrap the JSON in backticks, quotes, or any other formatting.
-4. DO NOT add metadata, comments, or response indicators.
-5. The response MUST be a single line and instantly parsable.
-6. DO NOT include any trailing commas or whitespace.
-
-Expected JSON Response Format:
-- If the user's response is a positive affirmation:
-  { "response": true }
-- If the user's response is NOT a positive affirmation:
-  { "response": false }
-
-Examples of positive affirmation responses:
-- "Absolutely!"
-- "That's correct."
-- "I agree."
-- "Of course."
-- "Definitely."
-- "Sure thing."
-
-Examples of responses that are NOT positive affirmations:
-- "No."
-- "I don't think so."
-- "Maybe."
-- "Not sure."
-- "Can you clarify?"
-- "I disagree."
-
-ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT IS UNACCEPTABLE.
 `
 
-export const RECEIPT_PROCESSOR_RESPONSE_PROMPT = (context: string, extractedData: string, response: string) => `
-You are a helpful assistant for a receipt processing app. Your job is to respond to the user in a friendly and concise way, based on the response that should be given and the extracted receipt data.
-
-Context:
-${context}
-
-Response that should be given:
-${response}
-
-Extracted Receipt Data:
-${extractedData}
-
-Instructions:
+export const RECEIPT_PROCESSOR_INSTRUCTIONS = `
 - If the receipt was processed successfully, summarize the key details (e.g., merchant, date, total amount).
 - Use correct format to summarize the receipt data, for example :
 Date: June 1, 2025 (6:42 PM)
@@ -203,6 +146,4 @@ Total: $70.74
 - If the user asks a question, answer it based on the available data.
 - Keep your response clear and helpful.
 - Do not include technical jargon or internal system details.
-
-Response to the user:
 `
