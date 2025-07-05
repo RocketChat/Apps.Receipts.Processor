@@ -9,7 +9,11 @@
     "strictNullChecks": true,
     "noImplicitReturns": true,
     "emitDecoratorMetadata": true,
-    "experimentalDecorators": true
+    "experimentalDecorators": true,
+    "types": ["node", "jest"],
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
+
   "include": ["prompts/*"]
 }
