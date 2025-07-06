@@ -14,7 +14,7 @@ Your task is to extract and return data from the image which include only items 
 6. extra_fees MUST include ALL non-item charges (taxes, services fees, etc.)
 
 **Your output must be machine-readable JSON that exactly matches the required structure.**
-### **Expected JSON Structure:**
+### Expected JSON Structure
 ## VALID EXAMPLE:
 {
     "items": [
@@ -80,7 +80,7 @@ Your task is to extract and return data from the image which include only items 
   'receipt_date': '05-01-2025'
 }
 
-Now process the following image and output ONLY the JSON response with correct structure.
+ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT IS UNACCEPTABLE
 `
 
 export const RECEIPT_VALIDATION_PROMPT = `

@@ -54,7 +54,6 @@ describe("RECEIPT_SCAN_PROMPT", () => {
           passCount++;
         });
     } finally {
-        // This ensures nockDone() is always called, saving the fixture even if tests fail.
         nockDone();
     }
   }, 100000 * Number(LENGTH));
