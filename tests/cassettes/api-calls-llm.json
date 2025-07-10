@@ -25,16 +25,16 @@
         },
         "status": 200,
         "response": {
-            "id": "chatcmpl-ReeeMABFUOQnY6TpxqXRshG3",
+            "id": "chatcmpl-Re9KIpbsg1qj0q3BEQpbS5P6",
             "object": "chat.completion",
-            "created": 1751793387,
+            "created": 1752159617,
             "model": "meta-llama/Llama-3.2-11B-Vision-Instruct",
             "choices": [
                 {
                     "index": 0,
                     "message": {
                         "role": "assistant",
-                        "content": "The tax invoice number is 3180203.",
+                        "content": "The receipt is for Western Eastern Stationery Sdn. Bhd, located at 42-46, Jln Sultan Azlan Shah 51200 Kuala Lumpur. The tax invoice number is 3180203.",
                         "name": null,
                         "tool_calls": []
                     },
@@ -44,16 +44,16 @@
             ],
             "usage": {
                 "prompt_tokens": 3214,
-                "total_tokens": 3225,
-                "completion_tokens": 11,
-                "estimated_cost": 0.00015802499999999998
+                "total_tokens": 3258,
+                "completion_tokens": 44,
+                "estimated_cost": 0.000159642
             }
         },
         "rawHeaders": {
             "connection": "keep-alive",
-            "content-length": "424",
+            "content-length": "529",
             "content-type": "application/json",
-            "date": "Sun, 06 Jul 2025 09:16:27 GMT",
+            "date": "Thu, 10 Jul 2025 15:00:17 GMT",
             "server": "uvicorn",
             "x-robots-tag": "noindex"
         },

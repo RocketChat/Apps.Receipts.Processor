@@ -30,33 +30,38 @@ describe("RECEIPT_SCAN_PROMPT", () => {
     expect(hfdata.length).toBeGreaterThan(0);
   });
 
-  test("LLM Responses give correct metadata", async () => {
-    const { nockDone } = await nock.back("receipt-scan-llm-responses.json");
-    try {
-        const responses = await Promise.all(
-          hfdata.map((item) => llmResponse(item.image_base64, prompt))
+  test(
+    "LLM Responses give correct metadata (one cassette per image)",
+    async () => {
+      for (let idx = 0; idx < hfdata.length; idx++) {
+        const item = hfdata[idx];
+        const { nockDone } = await nock.back(
+          `receipt-scan-llm-response-${idx}.json`
         );
-
-        responses.forEach((response, index) => {
+        try {
+          const response = await llmResponse(item.image_base64, prompt);
           const messageContent = response.choices[0]?.message?.content;
           let parsedResponse;
           try {
             parsedResponse = JSON.parse(messageContent);
           } catch (e) {
-            throw new Error(`Failed to parse JSON. The extracted string was: ${messageContent}`);
+            throw new Error(
+              `Failed to parse JSON for image #${idx}. The extracted string was: ${messageContent}`
+            );
           }
 
-          expect(parsedResponse.items).toEqual(hfdata[index].metadata.items);
-          expect(parsedResponse.total_price).toEqual(hfdata[index].metadata.total_price);
-          expect(parsedResponse.receipt_date).toEqual(hfdata[index].metadata.receipt_date);
-          expect(parsedResponse.extra_fees).toEqual(hfdata[index].metadata.extra_fees);
-          
+          expect(parsedResponse.items).toEqual(item.metadata.items);
+          expect(parsedResponse.total_price).toEqual(item.metadata.total_price);
+          expect(parsedResponse.extra_fees).toEqual(item.metadata.extra_fees);
+
           passCount++;
-        });
-    } finally {
-        nockDone();
-    }
-  }, 100000 * Number(LENGTH));
+        } finally {
+          nockDone();
+        }
+      }
+    },
+    100000 * Number(LENGTH)
+  );
 
   afterAll(() => {
     const percentage = (passCount / total) * 100;

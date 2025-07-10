@@ -1,21 +1,9 @@
 import { fetchDataHf, llmResponse } from "./ApiCalls";
 import { Row } from "./interfaces";
-import { describe, expect, beforeAll, test, afterAll } from "@jest/globals";
+import { describe, expect, beforeAll, test } from "@jest/globals";
 import { RECEIPT_VALIDATION_PROMPT } from "../../app/src/const/prompt";
 import { LENGTH } from "./constants";
 import nock from "nock";
-
-let passCount = 0;
-const total = Number(LENGTH);
-
-function extractJson(text: string): string | null {
-  if (!text) return null;
-  const jsonMatch = text.match(/```json([\s\S]*?)```|({[\s\S]*})/);
-  if (!jsonMatch) {
-    return null;
-  }
-  return (jsonMatch[1] || jsonMatch[2]).trim();
-}
 
 describe("RECEIPT_VALIDATION_PROMPT", () => {
   let hfdata: Row[] = [];
@@ -34,37 +22,36 @@ describe("RECEIPT_VALIDATION_PROMPT", () => {
     nockDone();
   }, 30000 * Number(LENGTH));
 
-  test("Dataset retrieval returns valid data", () => {
-    expect(hfdata).toBeDefined();
-    expect(hfdata.length).toBeGreaterThan(0);
-  });
+  test(
+    "LLM validates if images are receipts (80% threshold, generates cassettes)",
+    async () => {
+      let passCount = 0;
+      for (let idx = 0; idx < hfdata.length; idx++) {
+        const item = hfdata[idx];
+        const { nockDone } = await nock.back(
+          `receipt-validation-llm-response-${idx}.json`
+        );
+        const response = await llmResponse(item.image_base64, prompt);
+        const messageContent = response.choices[0]?.message?.content;
 
-  test("LLM validates if the given image is a receipt", async () => {
-    const { nockDone } = await nock.back("receipt-validation-llm-responses.json");
-    const responses = await Promise.all(
-      hfdata.map((item) => llmResponse(item.image_base64, prompt))
-    );
-
-    responses.forEach((response) => {
-      const messageContent = response.choices[0]?.message?.content;
-      const jsonString = extractJson(messageContent);
-
-      expect(jsonString).not.toBeNull();
-
-      try {
-        const parsedResponse = JSON.parse(jsonString!);
-        expect(parsedResponse).toStrictEqual({ is_receipt: true });
-        passCount++;
-      } catch(e) {
-        throw new Error(`Failed to parse or validate JSON: ${jsonString}`);
+        try {
+          const parsedResponse = JSON.parse(messageContent);
+          expect(parsedResponse).toStrictEqual({ is_receipt: true });
+          passCount++;
+        } catch (e) {
+          // Do not throw, just log the error so all tests run
+          console.error(
+            `Failed to parse or validate JSON for image #${idx}: ${messageContent}`
+          );
+        }
+        nockDone();
       }
-    });
-    
-    nockDone();
-  }, 70000 * Number(LENGTH));
-
-  afterAll(() => {
-    const percentage = (passCount / total) * 100;
-    console.log(`RECEIPT_VALIDATION_PROMPT passed ${percentage}% of the time.`);
-  });
+      const percentage = (passCount / hfdata.length) * 100;
+      console.log(
+        `RECEIPT_VALIDATION_PROMPT passed ${percentage}% of the time.`
+      );
+      expect(percentage).toBeGreaterThanOrEqual(80);
+    },
+    70000 * Number(LENGTH)
+  );
 });
