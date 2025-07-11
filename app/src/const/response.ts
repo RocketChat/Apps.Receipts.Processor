@@ -18,3 +18,6 @@ export const PROCESSING_IMAGE_RESPONSE =
 
 export const INVALID_SETTINGS_RESPONSE =
 `It looks like some LLM settings are missing. Please fill in all required details.`
+
+export const INVALID_DATE_RESPONSE =
+` "I couldn't understand the date range. Please use formats like 'YYYY-MM-DD to YYYY-MM-DD', 'last week', or 'last month'."`

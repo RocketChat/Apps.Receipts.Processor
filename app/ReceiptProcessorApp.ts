@@ -30,7 +30,7 @@ import {
     RECEIPT_PROCESSOR_INSTRUCTIONS,
     RECEIPT_SCAN_PROMPT,
     COMMAND_TRANSLATION_PROMPT_COMMANDS,
-    COMMAND_TRANSLATION_PROMPT_EXAMPLES
+    COMMAND_TRANSLATION_PROMPT_EXAMPLES,
 } from "./src/const/prompt";
 import {
     IUIKitInteractionHandler,
@@ -42,8 +42,8 @@ import { ChannelService } from "./src/service/channelService";
 import { CommandHandler } from "./src/commands/UserCommandHandler";
 import {
     COMMAND_TRANSLATION_PROMPT,
-    RESPONSE_PROMPT
-} from "./src/prompt_library/const/prompt"
+    RESPONSE_PROMPT,
+} from "./src/prompt_library/const/prompt";
 
 export class ReceiptProcessorApp
     extends App
@@ -435,8 +435,14 @@ export class ReceiptProcessorApp
         try {
             this.getLogger().info(`Processing text command: "${messageText}"`);
             const botHandler = new BotHandler(http, read);
-            const commandTranslationPrompt = COMMAND_TRANSLATION_PROMPT(COMMAND_TRANSLATION_PROMPT_COMMANDS, COMMAND_TRANSLATION_PROMPT_EXAMPLES, messageText)
-            const commandJson = await botHandler.processResponse(commandTranslationPrompt);
+            const commandTranslationPrompt = COMMAND_TRANSLATION_PROMPT(
+                COMMAND_TRANSLATION_PROMPT_COMMANDS,
+                COMMAND_TRANSLATION_PROMPT_EXAMPLES,
+                messageText
+            );
+            const commandJson = await botHandler.processResponse(
+                commandTranslationPrompt
+            );
 
             this.getLogger().info("Command JSON:", commandJson);
             const parsedCommand = JSON.parse(commandJson);
@@ -495,29 +501,20 @@ export class ReceiptProcessorApp
 
     private extractParams(message: string): any {
         const params: any = {};
-        const dateMatch = message.match(
-            /(\d{4}-\d{2}-\d{2})|today|yesterday|tomorrow/i
+        const dateRangeMatch = message.match(
+            /from\s+(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})/i
         );
-        if (dateMatch) {
-            if (dateMatch[0].match(/\d{4}-\d{2}-\d{2}/)) {
-                params.date = dateMatch[0];
-            } else {
-                const today = new Date();
-                switch (dateMatch[0].toLowerCase()) {
-                    case "today":
-                        params.date = today.toISOString().split("T")[0];
-                        break;
-                    case "yesterday":
-                        const yesterday = new Date(today);
-                        yesterday.setDate(yesterday.getDate() - 1);
-                        params.date = yesterday.toISOString().split("T")[0];
-                        break;
-                    case "tomorrow":
-                        const tomorrow = new Date(today);
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        params.date = tomorrow.toISOString().split("T")[0];
-                        break;
-                }
+
+        if (dateRangeMatch) {
+            params.startDate = dateRangeMatch[1];
+            params.endDate = dateRangeMatch[2];
+        } else {
+            const dateMatch = message.match(
+                /(?:(?:from|for|on)\s+)?(\d{4}-\d{2}-\d{2})/i
+            );
+
+            if (dateMatch && dateMatch[1]) {
+                params.date = dateMatch[1];
             }
         }
 

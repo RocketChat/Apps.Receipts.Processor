@@ -285,6 +285,40 @@ export class ReceiptHandler {
         }
     }
 
+    public async listReceiptDataByRoomUserAndDateRange(
+        sender: IUser,
+        room: IRoom,
+        appUser: IUser,
+        startDate: string,
+        endDate: string,
+        threadId: string | undefined
+    ): Promise<void> {
+        try {
+            const receipts = await this.receiptService.getReceiptsByUserAndRoomAndDateRange(
+                sender.id,
+                room.id,
+                startDate,
+                endDate
+            );
+            await this.displayReceipts(
+                receipts,
+                room,
+                appUser,
+                `No receipts found from ${startDate} to ${endDate}.`,
+                this.modify,
+                threadId
+            );
+        } catch (error) {
+            await sendMessage(
+                this.modify,
+                appUser,
+                room,
+                FAILED_GET_RECEIPTS_RESPONSE,
+                threadId
+            );
+        }
+    }
+
     public async listReceiptDataByThread(
         threadId: string,
         room: IRoom,

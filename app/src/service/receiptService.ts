@@ -56,6 +56,30 @@ export class ReceiptService {
         return records as IReceiptData[];
     }
 
+    public async getReceiptsByUserAndRoomAndDateRange(
+        userId: string,
+        roomId: string,
+        startDate: string,
+        endDate: string
+    ): Promise<IReceiptData[]> {
+        const userAssociationKey = Associations.withUserReceipts(userId);
+        const roomAssociationKey = Associations.withRoom(roomId);
+
+        const allUserRoomReceipts = await ReceiptRepository.getReceipts(
+            this.persistenceRead,
+            [userAssociationKey, roomAssociationKey]
+        );
+
+        const filteredReceipts = allUserRoomReceipts.filter(receipt => {
+            if (!receipt.uploadedDate) {
+                return false;
+            }
+            return receipt.uploadedDate >= startDate && receipt.uploadedDate <= endDate;
+        });
+
+        return filteredReceipts;
+    }
+
     public async deleteReceipt(roomId, threadId, messageId, userId: string) {
         const associations: RocketChatAssociationRecord[] = [
             Associations.withRoom(roomId),
