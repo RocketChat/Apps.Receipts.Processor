@@ -36,6 +36,8 @@ import {
     IUIKitInteractionHandler,
     UIKitBlockInteractionContext,
     IUIKitResponse,
+    UIKitViewSubmitInteractionContext,
+    UIKitViewCloseInteractionContext,
 } from "@rocket.chat/apps-engine/definition/uikit";
 import { BotHandler } from "./src/handler/botHandler";
 import { ChannelService } from "./src/service/channelService";
@@ -44,6 +46,7 @@ import {
     COMMAND_TRANSLATION_PROMPT,
     RESPONSE_PROMPT,
 } from "./src/prompt_library/const/prompt";
+import { createEditReceiptModal } from "./src/modals/editReceiptModal";
 
 export class ReceiptProcessorApp
     extends App
@@ -563,6 +566,17 @@ export class ReceiptProcessorApp
             if (data.message && appUser) {
                 await modify.getDeleter().deleteMessage(data.message, appUser);
             }
+        } else if (data.actionId === "edit-receipt-data") {
+            const blockBuilder = modify.getCreator().getBlockBuilder();
+            const modal = await createEditReceiptModal(
+                blockBuilder,
+                receiptData,
+                persistence
+            );
+
+            return context
+                .getInteractionResponder()
+                .openModalViewResponse(modal);
         } else if (data.actionId === "cancel-save-receipt" && appUser) {
             const builder = modify
                 .getCreator()
@@ -673,5 +687,116 @@ export class ReceiptProcessorApp
             `Has image: ${hasImageAttachment}, Bot mentioned: ${isBotMentioned}, Has command: ${hasReceiptCommand}`
         );
         return hasImageAttachment || hasReceiptCommand;
+    }
+
+    public async executeViewSubmitHandler(
+        context: UIKitViewSubmitInteractionContext,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify
+    ): Promise<IUIKitResponse> {
+        this.getLogger().info("Block action handler called!");
+        const { user, view } = context.getInteractionData();
+        const modalId = view.id;
+        const logger = this.getLogger();
+        logger.info(modalId);
+        logger.info("executeViewSubmitHandler called");
+        logger.info("User:", user);
+        logger.info("View:", view);
+
+        const receiptHandler = new ReceiptHandler(
+            persistence,
+            read.getPersistenceReader(),
+            modify
+        );
+
+        try {
+            const state = view.state as any;
+            logger.info("Modal state:", JSON.stringify(state, null, 2));
+
+            const receiptDate = state["receipt-edit-form"]?.receiptDate;
+            const extraFee = Number(state["extra-fee"]?.extraFee || 0);
+            const totalPrice = Number(state["total-price"]?.totalPrice || 0);
+
+            logger.info("Extracted fields:", {
+                receiptDate,
+                extraFee,
+                totalPrice,
+            });
+
+            const items: IReceiptItem[] = [];
+            let index = 0;
+            while (state[`item-name-${index}`]) {
+                const name = state[`item-name-${index}`]?.[`itemName-${index}`];
+                const quantity = Number(
+                    state[`item-quantity-${index}`]?.[
+                        `itemQuantity-${index}`
+                    ] || 0
+                );
+                const price = Number(
+                    state[`item-price-${index}`]?.[`itemPrice-${index}`] || 0
+                );
+
+                logger.info(`Item ${index}:`, { name, quantity, price });
+                if (name) {
+                    items.push({ name, quantity, price });
+                }
+
+                index++;
+            }
+
+            const stored = await receiptHandler.getModals(modalId);
+            const originalData = stored as IReceiptData;
+            logger.info("Original data:", originalData);
+
+            const roomId = originalData.roomId;
+            logger.info("Room Id : " + roomId);
+
+            const room = await read.getRoomReader().getById(roomId);
+            if (!room) {
+                this.getLogger().error(`Room not found for id: ${roomId}`);
+                return context.getInteractionResponder().errorResponse();
+            }
+
+            const updatedData: IReceiptData = {
+                userId: originalData.userId,
+                messageId: originalData.messageId,
+                threadId: originalData.threadId,
+                roomId: originalData.roomId,
+                uploadedDate: originalData.uploadedDate,
+
+                receiptDate,
+                extraFee,
+                totalPrice,
+                items,
+            };
+
+            logger.info("Updated data:", JSON.stringify(updatedData, null, 2));
+            if (!receiptDate || items.length === 0) {
+                logger.error("Validation failed: Missing required fields");
+                return context.getInteractionResponder().errorResponse();
+            }
+
+            await receiptHandler.updateReceiptData(updatedData, room, user);
+            await receiptHandler.deleteModal(modalId);
+
+            logger.info("Receipt updated successfully");
+            return context.getInteractionResponder().successResponse();
+        } catch (error) {
+            logger.error("Error in executeViewSubmitHandler:", error);
+            return context.getInteractionResponder().errorResponse();
+        }
+    }
+
+    public async executeViewClosedHandler(
+        context: UIKitViewCloseInteractionContext,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify
+    ): Promise<IUIKitResponse> {
+        this.getLogger().info("Modal was closed (not submitted).");
+        return context.getInteractionResponder().successResponse();
     }
 }

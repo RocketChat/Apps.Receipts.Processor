@@ -93,4 +93,16 @@ export class ReceiptService {
 
         await ReceiptRepository.deleteReceipt(this.persistence, associations)
     }
+
+    public async updateReceipt(data: IReceiptData): Promise<void> {
+        await ReceiptRepository.updateReceipt(this.persistence, this.persistenceRead, data);
+    }
+
+    public async getModals(modalId: string) {
+        return  ReceiptRepository.getModals(this.persistenceRead, modalId)
+    }
+
+    public async deleteModal(modalId: string) {
+        return ReceiptRepository.deleteModal(this.persistence, modalId)
+    }
 }

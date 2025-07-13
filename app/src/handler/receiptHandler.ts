@@ -120,7 +120,7 @@ export class ReceiptHandler {
                 const itemTotal = (item.price * item.quantity).toFixed(2);
                 if (item.quantity > 1) {
                     summary += `• ${item.name} (${item.quantity} x $${(
-                        item.price / item.quantity
+                        item.price
                     ).toFixed(2)}) - $${itemTotal}\n`;
                 } else {
                     summary += `• ${item.name} - $${itemTotal}\n`;
@@ -135,6 +135,12 @@ export class ReceiptHandler {
 
             blockBuilder.addActionsBlock({
                 elements: [
+                    blockBuilder.newButtonElement({
+                        text: blockBuilder.newPlainTextObject("✏️ Edit"),
+                        actionId: "edit-receipt-data",
+                        value: JSON.stringify(receipt),
+                        style: ButtonStyle.PRIMARY,
+                    }),
                     blockBuilder.newButtonElement({
                         text: blockBuilder.newPlainTextObject("🗑️ Delete"),
                         actionId: "delete-receipt-data",
@@ -404,5 +410,44 @@ export class ReceiptHandler {
         messageId: string
     ): Promise<void> {
         await this.receiptService.deleteReceipt(roomId, threadId, messageId, userId)
+    }
+
+    public async updateReceiptData(
+        updatedData: IReceiptData,
+        room: IRoom,
+        appUser: IUser
+    ): Promise<void> {
+        try {
+            await this.receiptService.updateReceipt(updatedData);
+            const message = this.modify
+                .getCreator()
+                .startMessage()
+                .setSender(appUser)
+                .setRoom(room)
+                .setText("✅ Your receipt has been successfully updated.");
+
+            if (updatedData.threadId) {
+                message.setThreadId(updatedData.threadId);
+            }
+
+            await this.modify.getCreator().finish(message);
+        } catch (error) {
+            console.error("Error updating receipt:", error);
+            await sendMessage(
+                this.modify,
+                appUser,
+                room,
+                "❌ Failed to update the receipt. Please try again.",
+                updatedData.threadId ?? undefined
+            );
+        }
+    }
+
+    public async getModals(modalId : string) {
+        return this.receiptService.getModals(modalId);
+    }
+
+    public async deleteModal(modalId : string) {
+        return this.receiptService.deleteModal(modalId);
     }
 }
