@@ -143,9 +143,7 @@ export class ReceiptProcessorApp
                 cleanedMessage,
                 message,
                 read,
-                http,
-                persistence,
-                modify
+                http
             );
         }
     }
@@ -201,9 +199,7 @@ export class ReceiptProcessorApp
                 cleanedMessage,
                 message,
                 read,
-                http,
-                persistence,
-                modify
+                http
             );
         } else {
             await sendMessage(
@@ -432,8 +428,6 @@ export class ReceiptProcessorApp
         message: IMessage,
         read: IRead,
         http: IHttp,
-        persistence: IPersistence,
-        modify: IModify
     ): Promise<void> {
         try {
             this.getLogger().info(`Processing text command: "${messageText}"`);
@@ -791,10 +785,6 @@ export class ReceiptProcessorApp
 
     public async executeViewClosedHandler(
         context: UIKitViewCloseInteractionContext,
-        read: IRead,
-        http: IHttp,
-        persistence: IPersistence,
-        modify: IModify
     ): Promise<IUIKitResponse> {
         this.getLogger().info("Modal was closed (not submitted).");
         return context.getInteractionResponder().successResponse();

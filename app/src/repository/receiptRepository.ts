@@ -60,10 +60,10 @@ export const updateReceipt = async (
 
     const [record] = await persistenceRead.readByAssociations(associations);
     if (!record) {
-        throw new Error("Receipt not found for updating.");
+        await persistence.createWithAssociations(data, associations);
+    } else {
+        await persistence.updateByAssociations(associations, data);
     }
-
-    await persistence.updateByAssociations(associations, data);
 };
 
 export const getModals = async(

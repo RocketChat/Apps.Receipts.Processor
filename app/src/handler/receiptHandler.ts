@@ -15,7 +15,10 @@ import {
 import { sendMessage } from "../utils/message";
 import { ReceiptService } from "../service/receiptService";
 import { toDateString } from "../utils/date";
-import { ButtonStyle, BlockBuilder } from "@rocket.chat/apps-engine/definition/uikit";
+import {
+    ButtonStyle,
+    BlockBuilder,
+} from "@rocket.chat/apps-engine/definition/uikit";
 
 export class ReceiptHandler {
     constructor(
@@ -99,40 +102,51 @@ export class ReceiptHandler {
         }
     }
 
-    public formatReceiptsSummaryWithBlocks(
+    private buildReceiptBlocks(
         blockBuilder: BlockBuilder,
-        receipts: IReceiptData[]
+        receipt: IReceiptData,
+        options?: {
+            index?: number;
+            showActions?: boolean;
+            showSuccess?: boolean;
+        }
     ): void {
-        let receiptTotalPrice = 0;
+        const {
+            index,
+            showActions = true,
+            showSuccess = false,
+        } = options || {};
+        const header =
+            index !== undefined
+                ? `*${index + 1}. Receipt from ${receipt.uploadedDate}*`
+                : `📄 *Receipt from ${receipt.uploadedDate}*`;
 
         blockBuilder.addSectionBlock({
-            text: blockBuilder.newMarkdownTextObject(
-                `📋 *Your Receipts (${receipts.length})* 📋`
-            ),
+            text: blockBuilder.newMarkdownTextObject(header),
         });
 
-        receipts.forEach((receipt, index) => {
-            const date = receipt.uploadedDate;
-            const totalPrice = receipt.totalPrice.toFixed(2);
-            receiptTotalPrice += receipt.totalPrice;
-            let summary = `*${index + 1}. Receipt from ${date}*\n*Items:*\n`;
-            receipt.items.forEach((item) => {
-                const itemTotal = (item.price * item.quantity).toFixed(2);
-                if (item.quantity > 1) {
-                    summary += `• ${item.name} (${item.quantity} x $${(
-                        item.price
-                    ).toFixed(2)}) - $${itemTotal}\n`;
-                } else {
-                    summary += `• ${item.name} - $${itemTotal}\n`;
-                }
-            });
-            summary += `*Extra Fees:* $${receipt.extraFee.toFixed(2)}\n`;
-            summary += `*Total:* $${totalPrice}`;
+        let summary = `*Items:*\n`;
+        receipt.items.forEach((item) => {
+            const itemTotal = (item.price * item.quantity).toFixed(2);
+            if (item.quantity > 1) {
+                summary += `• ${item.name} (${
+                    item.quantity
+                } × $${item.price.toFixed(2)}) — $${itemTotal}\n`;
+            } else {
+                summary += `• ${item.name} — $${itemTotal}\n`;
+            }
+        });
+        summary += `*Extra Fees:* $${receipt.extraFee.toFixed(2)}\n`;
+        summary += `*Total:* $${receipt.totalPrice.toFixed(2)}`;
+        if (showSuccess) {
+            summary += `\n\n✅ Your receipt has been successfully updated.`;
+        }
 
-            blockBuilder.addSectionBlock({
-                text: blockBuilder.newMarkdownTextObject(summary),
-            });
+        blockBuilder.addSectionBlock({
+            text: blockBuilder.newMarkdownTextObject(summary),
+        });
 
+        if (showActions) {
             blockBuilder.addActionsBlock({
                 elements: [
                     blockBuilder.newButtonElement({
@@ -148,13 +162,33 @@ export class ReceiptHandler {
                             messageId: receipt.messageId,
                             roomId: receipt.roomId,
                             threadId: receipt.threadId,
-                            userId: receipt.userId
+                            userId: receipt.userId,
                         }),
                         style: ButtonStyle.DANGER,
                     }),
                 ],
             });
+        }
+    }
 
+    public formatReceiptsSummaryWithBlocks(
+        blockBuilder: BlockBuilder,
+        receipts: IReceiptData[]
+    ): void {
+        let receiptTotalPrice = 0;
+
+        blockBuilder.addSectionBlock({
+            text: blockBuilder.newMarkdownTextObject(
+                `📋 *Your Receipts (${receipts.length})* 📋`
+            ),
+        });
+
+        receipts.forEach((receipt, index) => {
+            receiptTotalPrice += receipt.totalPrice;
+            this.buildReceiptBlocks(blockBuilder, receipt, {
+                index,
+                showActions: true,
+            });
             if (index < receipts.length - 1) {
                 blockBuilder.addDividerBlock();
             }
@@ -166,6 +200,16 @@ export class ReceiptHandler {
                     2
                 )}`
             ),
+        });
+    }
+
+    public formatSingleReceiptBlocks(
+        blockBuilder: BlockBuilder,
+        receipt: IReceiptData
+    ): void {
+        this.buildReceiptBlocks(blockBuilder, receipt, {
+            showActions: false,
+            showSuccess: true,
         });
     }
 
@@ -300,12 +344,13 @@ export class ReceiptHandler {
         threadId: string | undefined
     ): Promise<void> {
         try {
-            const receipts = await this.receiptService.getReceiptsByUserAndRoomAndDateRange(
-                sender.id,
-                room.id,
-                startDate,
-                endDate
-            );
+            const receipts =
+                await this.receiptService.getReceiptsByUserAndRoomAndDateRange(
+                    sender.id,
+                    room.id,
+                    startDate,
+                    endDate
+                );
             await this.displayReceipts(
                 receipts,
                 room,
@@ -390,10 +435,16 @@ export class ReceiptHandler {
         }
     }
 
-    public async getReceiptsForUpdate(roomId: string, threadId: string | undefined): Promise<IReceiptData[] | null> {
+    public async getReceiptsForUpdate(
+        roomId: string,
+        threadId: string | undefined
+    ): Promise<IReceiptData[] | null> {
         try {
             if (threadId) {
-                return await this.receiptService.getReceiptsByThread(roomId, threadId);
+                return await this.receiptService.getReceiptsByThread(
+                    roomId,
+                    threadId
+                );
             } else {
                 return await this.receiptService.getReceiptsByRoom(roomId);
             }
@@ -409,7 +460,12 @@ export class ReceiptHandler {
         roomId: string,
         messageId: string
     ): Promise<void> {
-        await this.receiptService.deleteReceipt(roomId, threadId, messageId, userId)
+        await this.receiptService.deleteReceipt(
+            roomId,
+            threadId,
+            messageId,
+            userId
+        );
     }
 
     public async updateReceiptData(
@@ -418,13 +474,16 @@ export class ReceiptHandler {
         appUser: IUser
     ): Promise<void> {
         try {
+            updatedData.totalPrice = this.calculateReceiptTotal(updatedData);
             await this.receiptService.updateReceipt(updatedData);
+            const blockBuilder = this.modify.getCreator().getBlockBuilder();
+            this.formatSingleReceiptBlocks(blockBuilder, updatedData);
             const message = this.modify
                 .getCreator()
                 .startMessage()
                 .setSender(appUser)
                 .setRoom(room)
-                .setText("✅ Your receipt has been successfully updated.");
+                .setBlocks(blockBuilder);
 
             if (updatedData.threadId) {
                 message.setThreadId(updatedData.threadId);
@@ -443,11 +502,20 @@ export class ReceiptHandler {
         }
     }
 
-    public async getModals(modalId : string) {
+    public async getModals(modalId: string) {
         return this.receiptService.getModals(modalId);
     }
 
-    public async deleteModal(modalId : string) {
+    public async deleteModal(modalId: string) {
         return this.receiptService.deleteModal(modalId);
+    }
+
+    private calculateReceiptTotal(receipt: IReceiptData): number {
+        const itemsTotal = receipt.items.reduce(
+            (sum, item) => sum + item.price * item.quantity,
+            0
+        );
+        const finalTotal = itemsTotal + receipt.extraFee;
+        return Number(finalTotal.toFixed(2));
     }
 }

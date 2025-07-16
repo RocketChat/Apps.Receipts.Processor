@@ -1,6 +1,5 @@
 import {
     BlockBuilder,
-    TextObjectType,
 } from "@rocket.chat/apps-engine/definition/uikit";
 import { IUIKitModalViewParam } from "@rocket.chat/apps-engine/definition/uikit/UIKitInteractionResponder";
 import { IReceiptData } from "../types/receipt";
@@ -67,14 +66,6 @@ export async function createEditReceiptModal(
                 initialValue: String(receiptData.extraFee),
             }),
         })
-        .addInputBlock({
-            blockId: "total-price",
-            label: blockBuilder.newPlainTextObject("Total Price"),
-            element: blockBuilder.newPlainTextInputElement({
-                actionId: "totalPrice",
-                initialValue: String(receiptData.totalPrice),
-            }),
-        });
 
     await persistence.createWithAssociation(
         receiptData,
