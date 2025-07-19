@@ -122,7 +122,7 @@ public async execute() {
                 try {
                     this.app.getLogger().info("Room id :", this.room.id)
                     this.app.getLogger().info("user id :", this.sender.id)
-                    await this.channelService.addChannel(this.room.id, this.sender.id, this.app.getLogger());
+                    await this.channelService.addChannel(this.room.id, this.sender.id);
                     sendMessage(
                         this.modify,
                         appUser,

@@ -8,12 +8,12 @@ export class ChannelService {
         private readonly persistenceRead: IPersistenceRead
     ) {}
 
-    public async addChannel(roomId: string, userId: string, logger: ILogger): Promise<void> {
+    public async addChannel(roomId: string, userId: string): Promise<void> {
         const userAssociationKey = Associations.withUserChannels(userId)
         await ChannelRepository.addChannel(this.persistence, this.persistenceRead, roomId, userAssociationKey);
     }
 
-    public async getChannels(userId: string, logger: ILogger) {
+    public async getChannels(userId: string) {
         const userAssociationKey = Associations.withUserChannels(userId)
         const channels = await ChannelRepository.getChannels(this.persistenceRead, userAssociationKey)
 

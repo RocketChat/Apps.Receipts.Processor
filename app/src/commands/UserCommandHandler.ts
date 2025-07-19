@@ -2,6 +2,7 @@ import {
     IRead,
     IModify,
     IPersistence,
+    IHttp,
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
@@ -10,20 +11,25 @@ import { ReceiptHandler } from "../handler/receiptHandler";
 import { ChannelService } from "../service/channelService";
 import { sendMessage } from "../utils/message";
 import { CommandParams, CommandResult } from "../types/command";
-import { INVALID_DATE_RESPONSE } from "../const/response";
+import { BotHandler } from "../handler/botHandler";
+import { RESPONSE_PROMPT } from "../../src/prompt_library/const/prompt";
 
 function parseDateString(dateStr: string): string | undefined {
     if (!dateStr) return undefined;
 
     const normalized = dateStr.replace(/\//g, "-");
     if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-        const dateParts = normalized.split('-');
+        const dateParts = normalized.split("-");
         const year = parseInt(dateParts[0], 10);
         const month = parseInt(dateParts[1], 10) - 1;
         const day = parseInt(dateParts[2], 10);
         const date = new Date(year, month, day);
 
-        if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
+        if (
+            date.getFullYear() === year &&
+            date.getMonth() === month &&
+            date.getDate() === day
+        ) {
             return normalized;
         }
     }
@@ -33,6 +39,7 @@ function parseDateString(dateStr: string): string | undefined {
 export class CommandHandler {
     private receiptHandler: ReceiptHandler;
     private channelService: ChannelService;
+    private botHandler: BotHandler;
     private app: ReceiptProcessorApp;
     private appUser: IUser;
 
@@ -40,6 +47,7 @@ export class CommandHandler {
         private readonly read: IRead,
         private readonly modify: IModify,
         private readonly persistence: IPersistence,
+        private readonly http: IHttp,
         app: ReceiptProcessorApp,
         appUser: IUser
     ) {
@@ -53,7 +61,83 @@ export class CommandHandler {
             this.persistence,
             this.read.getPersistenceReader()
         );
+        this.botHandler = new BotHandler(this.http, this.read);
         this.appUser = appUser;
+    }
+
+    static isAddChannelCommand(messageText: string): boolean {
+        if (!messageText) return false;
+        const lower = messageText.toLowerCase();
+        const addChannelPhrases = [
+            "add channel",
+            "register channel",
+            "add this channel",
+            "register this channel",
+            "add current channel",
+            "register current channel",
+            "add this room",
+            "register this room",
+            "add room",
+            "register room",
+        ];
+        return addChannelPhrases.some((phrase) => lower.includes(phrase));
+    }
+
+    static isReceiptCommand(messageText: string): boolean {
+        if (!messageText) return false;
+
+        const lowerText = messageText.toLowerCase();
+        const keywords = [
+            "receipt",
+            "receipts",
+            "show",
+            "list",
+            "display",
+            "my receipts",
+            "room receipts",
+            "thread receipts",
+            "add channel",
+            "help",
+            "date",
+            "yesterday",
+            "today",
+            "spending",
+            "total",
+            "export",
+            "search",
+            "find",
+        ];
+
+        return keywords.some((keyword) => lowerText.includes(keyword));
+    }
+
+    static extractParams(message: string): any {
+        const params: any = {};
+        const dateRangeMatch = message.match(
+            /from\s+(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})/i
+        );
+
+        if (dateRangeMatch) {
+            params.startDate = dateRangeMatch[1];
+            params.endDate = dateRangeMatch[2];
+        } else {
+            const dateMatch = message.match(
+                /(?:(?:from|for|on)\s+)?(\d{4}-\d{2}-\d{2})/i
+            );
+
+            if (dateMatch && dateMatch[1]) {
+                params.date = dateMatch[1];
+            }
+        }
+
+        const searchMatch = message.match(
+            /(?:with|for|containing|about)\s+(.+)/i
+        );
+        if (searchMatch) {
+            params.searchTerm = searchMatch[1].trim();
+        }
+
+        return Object.keys(params).length > 0 ? params : undefined;
     }
 
     public async executeCommand(
@@ -93,7 +177,9 @@ export class CommandHandler {
                     );
 
                 case "date":
-                    const parsedDateParam = params?.date ? parseDateString(params.date) : undefined;
+                    const parsedDateParam = params?.date
+                        ? parseDateString(params.date)
+                        : undefined;
                     return await this.listReceiptsByDate(
                         user,
                         room,
@@ -104,8 +190,12 @@ export class CommandHandler {
                     );
 
                 case "date_range":
-                    const startDate = params?.startDate ? parseDateString(params.startDate) : undefined;
-                    const endDate = params?.endDate ? parseDateString(params.endDate) : undefined;
+                    const startDate = params?.startDate
+                        ? parseDateString(params.startDate)
+                        : undefined;
+                    const endDate = params?.endDate
+                        ? parseDateString(params.endDate)
+                        : undefined;
 
                     if (startDate && endDate) {
                         return await this.listReceiptsByDateRange(
@@ -125,7 +215,10 @@ export class CommandHandler {
                             "Please provide a valid start and end date in YYYY-MM-DD format (e.g., 'from 2024-07-01 to 2024-07-31').",
                             threadId
                         );
-                        return { success: false, message: "Invalid date range parameters." };
+                        return {
+                            success: false,
+                            message: "Invalid date range parameters.",
+                        };
                     }
 
                 case "thread":
@@ -300,7 +393,9 @@ export class CommandHandler {
             );
             return { success: true };
         } catch (error) {
-            this.app.getLogger().error("Error processing date range command:", error);
+            this.app
+                .getLogger()
+                .error("Error processing date range command:", error);
             sendMessage(
                 this.modify,
                 appUser,
@@ -372,7 +467,7 @@ export class CommandHandler {
 
         try {
             await this.receiptHandler.listReceiptDataByThreadAndUser(
-                user.id, // Corrected to pass userId first
+                user.id,
                 threadId,
                 room,
                 appUser
@@ -402,19 +497,18 @@ export class CommandHandler {
         try {
             this.app.getLogger().info("Room id:", room.id);
             this.app.getLogger().info("User id:", user.id);
+            const context =
+                "The user just added the channel to the list of channels that the receipt processor bot will listen to.";
+            const response =
+                "✅ You have successfully added this channel! Now, I can store your receipt data and show it to you whenever you need. If you have more channels, feel free to add them too!";
+            const instructions =
+                "Respond in a friendly, concise, and encouraging way. Let the user know the channel was added and what the bot can do next.";
 
-            await this.channelService.addChannel(
-                room.id,
-                user.id,
-                this.app.getLogger()
+            const processResponse = await this.botHandler.processResponse(
+                RESPONSE_PROMPT(context, "", response, instructions)
             );
-            sendMessage(
-                this.modify,
-                appUser,
-                room,
-                "✅ This channel has been added to your channel list.",
-                threadId
-            );
+            await this.channelService.addChannel(room.id, user.id);
+            sendMessage(this.modify, appUser, room, processResponse, threadId);
             return { success: true };
         } catch (error) {
             this.app.getLogger().error("Error adding channel:", error);
@@ -435,22 +529,37 @@ export class CommandHandler {
         threadId?: string
     ): Promise<CommandResult> {
         const helpMessage = `
-📝 **Receipt Command Help** 📝
+            👋 **Hi there! I'm here to help you manage your receipts.**
 
-**How to use:** Mention me with your request like \`@${this.appUser.name} help\`
+            Here are some things you can ask me to do:
 
-Available commands:
-- **Show my receipts** - "@bot show me my receipts" / "@bot list my receipts"
-- **Show room receipts** - "@bot show all receipts in this room" / "@bot room receipts"
-- **Show receipts by date** - "@bot show receipts from 2024-01-15" / "@bot receipts from yesterday"
-- **Show receipts by date range** - "@bot show receipts from 2024-07-01 to 2024-07-31" / "@bot show receipts from last week" / "@bot show receipts from last month"
-- **Show thread receipts** - "@bot show receipts in this thread" (must be in thread)
-- **Show my thread receipts** - "@bot show my receipts in this thread" (must be in thread)
-- **Add channel** - "@bot add this channel to my list" / "@bot subscribe to this room"
-- **Help** - "@bot help" / "@bot what can you do?"
+            - **See your receipts:**
+            Just say something like "@${this.appUser.name} show me my receipts" or "@bot list my receipts".
 
-**Note:** You can upload receipt images without mentioning me - I'll process them automatically!
-        `;
+            - **View all receipts in this room:**
+            Try "@bot show all receipts in this room" or "@bot room receipts".
+
+            - **Find receipts by date:**
+            For example, "@bot show receipts from 2024-01-15" or "@bot receipts from yesterday".
+
+            - **Look up receipts for a date range:**
+            You can ask "@bot show receipts from 2024-07-01 to 2024-07-31", or try "from last week" or "from last month".
+
+            - **See receipts in a thread:**
+            If you're in a thread, just say "@bot show receipts in this thread".
+
+            - **See your own receipts in a thread:**
+            In a thread, you can also ask "@bot show my receipts in this thread".
+
+            - **Add this channel:**
+            Say "@bot add this channel to my list" or "@bot subscribe to this room" to start tracking receipts here.
+
+            - **Need help?**
+            Just ask "@bot help" or "@bot what can you do?".
+
+            **Tip:** You can also upload receipt images directly—no need to mention me! I’ll process them automatically.
+
+            If you ever get stuck or have a question, just let me know. I’m always here to help!`;
 
         sendMessage(this.modify, appUser, room, helpMessage.trim(), threadId);
         return { success: true };
@@ -461,13 +570,18 @@ Available commands:
         room: IRoom,
         threadId?: string
     ): Promise<CommandResult> {
-        sendMessage(
-            this.modify,
-            appUser,
-            room,
-            "I didn't understand that command. Just ask me naturally what you want to do with your receipts, or say 'help' to see what I can do!",
-            threadId
+        const context =
+            "The user entered a command or message that the bot does not recognize or support. The user may be trying to interact with the receipt processor bot, but the intent is unclear.";
+        const response =
+            "I'm not sure I understood that. If you need help with your receipts or want to know what I can do, just let me know by asking for help!";
+        const instructions =
+            "Respond in a friendly, concise, and encouraging way. Let the user know their message wasn't understood, and suggest they ask for help or try rephrasing. Do not use the exact words from the example; vary the wording and keep it open-ended.";
+
+        const processResponse = await this.botHandler.processResponse(
+            RESPONSE_PROMPT(context, "", response, instructions)
         );
+
+        sendMessage(this.modify, appUser, room, processResponse, threadId);
         return { success: false };
     }
 }

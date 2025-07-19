@@ -28,10 +28,10 @@ You are a helpful assistant. Your job is to respond to the user in a friendly an
 Context:
 ${context}
 
-Response that should be given:
+Example of Response that should be given:
 ${response}
 
-Extracted Receipt Data:
+Extracted Data:
 ${extractedData}
 
 Instructions:
