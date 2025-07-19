@@ -6,4 +6,5 @@ export default {
   },
   moduleFileExtensions: ["ts", "js"],
   testMatch: ["**/*.test.ts"],
+  setupFilesAfterEnv: ['./prompts/setup.ts'],
 };

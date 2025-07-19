@@ -3,19 +3,13 @@ import {
     SettingType,
 } from "@rocket.chat/apps-engine/definition/settings";
 import { IRead } from "@rocket.chat/apps-engine/definition/accessors";
+import { LLMProvider } from "../prompt_library/config";
 
 export enum Settings {
     PROVIDER = "provider",
     MODEL_TYPE = "model_type",
     API_KEY = "api_key",
     API_ENDPOINT = "api_endpoint",
-}
-
-export enum LLMProvider {
-    OPENAI = "openai",
-    GEMINI = "gemini",
-    CLAUDE = "claude",
-    OTHER = "other",
 }
 
 export const PROVIDER_MODELS = {
@@ -108,6 +102,3 @@ export async function getAPIConfig(read: IRead) {
     };
 }
 
-export function getProviderModels(provider: LLMProvider) {
-    return PROVIDER_MODELS[provider] || [];
-}

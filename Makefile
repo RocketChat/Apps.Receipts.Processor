@@ -6,3 +6,6 @@ deploy:
 		exit 1; \
 	fi
 	cd app && rc-apps deploy --url $(url) --username $(username) --password $(password)
+
+test:
+	cd tests && jest

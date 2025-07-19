@@ -1,9 +1,9 @@
-import { HFResponse, Row, ReceiptMetaData } from "./interfaces";
+import { HFResponse, Row } from "./interfaces";
 import { API_KEY, modelType, API_END_POINT, LENGTH } from "./constants";
 
 export async function fetchDataHf() {
     const params = new URLSearchParams({
-        dataset: "moyrsd/rocketchat_receipts_dataset",
+        dataset: "ashbornee/gsoc-receipt-dataset",
         config: "default",
         split: "train",
         offset: "0",

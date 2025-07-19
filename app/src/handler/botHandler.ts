@@ -1,28 +1,31 @@
 import { IRead, IHttp } from "@rocket.chat/apps-engine/definition/accessors";
+import { LLMClient } from "../prompt_library/client";
+import { TextRequest } from "../prompt_library/const/types";
 import { getAPIConfig } from "../config/settings";
-import { LLMClient } from "./llmHandler";
+import { getLLMConfigFromValues } from "../prompt_library/config";
 
 export class BotHandler {
     private llmClient: LLMClient;
-
     constructor(private readonly http: IHttp, private readonly read: IRead) {
         this.llmClient = new LLMClient(http);
     }
 
-    public async processResponse(prompt: string): Promise<any> {
+    public async processResponse(prompt: string): Promise<string> {
         const { apiKey, modelType, apiEndpoint, provider } = await getAPIConfig(
             this.read
         );
-
-        return await this.llmClient.sendTextRequest(
+        const config = await getLLMConfigFromValues({
             provider,
-            apiEndpoint,
             apiKey,
             modelType,
-            {
-                systemPrompt: "You are a useful assistant",
-                userPrompt: prompt,
-            }
-        );
+            apiEndpoint,
+        });
+
+        const request: TextRequest = {
+            systemPrompt: "You are a helpful assistant.",
+            userPrompt: prompt,
+        };
+
+        return await this.llmClient.sendTextRequest(config, request);
     }
 }
