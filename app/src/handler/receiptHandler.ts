@@ -15,7 +15,10 @@ import {
 import { sendMessage } from "../utils/message";
 import { ReceiptService } from "../service/receiptService";
 import { toDateString } from "../utils/date";
-import { ButtonStyle, BlockBuilder } from "@rocket.chat/apps-engine/definition/uikit";
+import {
+    ButtonStyle,
+    BlockBuilder,
+} from "@rocket.chat/apps-engine/definition/uikit";
 
 export class ReceiptHandler {
     constructor(
@@ -99,6 +102,75 @@ export class ReceiptHandler {
         }
     }
 
+    private buildReceiptBlocks(
+        blockBuilder: BlockBuilder,
+        receipt: IReceiptData,
+        options?: {
+            index?: number;
+            showActions?: boolean;
+            showSuccess?: boolean;
+        }
+    ): void {
+        const {
+            index,
+            showActions = true,
+            showSuccess = false,
+        } = options || {};
+        const header =
+            index !== undefined
+                ? `*${index + 1}. Receipt from ${receipt.uploadedDate}*`
+                : `📄 *Receipt from ${receipt.uploadedDate}*`;
+
+        blockBuilder.addSectionBlock({
+            text: blockBuilder.newMarkdownTextObject(header),
+        });
+
+        let summary = `*Items:*\n`;
+        receipt.items.forEach((item) => {
+            const itemTotal = (item.price * item.quantity).toFixed(2);
+            if (item.quantity > 1) {
+                summary += `• ${item.name} (${
+                    item.quantity
+                } × $${item.price.toFixed(2)}) — $${itemTotal}\n`;
+            } else {
+                summary += `• ${item.name} — $${itemTotal}\n`;
+            }
+        });
+        summary += `*Extra Fees:* $${receipt.extraFee.toFixed(2)}\n`;
+        summary += `*Total:* $${receipt.totalPrice.toFixed(2)}`;
+        if (showSuccess) {
+            summary += `\n\n✅ Your receipt has been successfully updated.`;
+        }
+
+        blockBuilder.addSectionBlock({
+            text: blockBuilder.newMarkdownTextObject(summary),
+        });
+
+        if (showActions) {
+            blockBuilder.addActionsBlock({
+                elements: [
+                    blockBuilder.newButtonElement({
+                        text: blockBuilder.newPlainTextObject("✏️ Edit"),
+                        actionId: "edit-receipt-data",
+                        value: JSON.stringify(receipt),
+                        style: ButtonStyle.PRIMARY,
+                    }),
+                    blockBuilder.newButtonElement({
+                        text: blockBuilder.newPlainTextObject("🗑️ Delete"),
+                        actionId: "delete-receipt-data",
+                        value: JSON.stringify({
+                            messageId: receipt.messageId,
+                            roomId: receipt.roomId,
+                            threadId: receipt.threadId,
+                            userId: receipt.userId,
+                        }),
+                        style: ButtonStyle.DANGER,
+                    }),
+                ],
+            });
+        }
+    }
+
     public formatReceiptsSummaryWithBlocks(
         blockBuilder: BlockBuilder,
         receipts: IReceiptData[]
@@ -112,43 +184,11 @@ export class ReceiptHandler {
         });
 
         receipts.forEach((receipt, index) => {
-            const date = receipt.uploadedDate;
-            const totalPrice = receipt.totalPrice.toFixed(2);
             receiptTotalPrice += receipt.totalPrice;
-            let summary = `*${index + 1}. Receipt from ${date}*\n*Items:*\n`;
-            receipt.items.forEach((item) => {
-                const itemTotal = (item.price * item.quantity).toFixed(2);
-                if (item.quantity > 1) {
-                    summary += `• ${item.name} (${item.quantity} x $${(
-                        item.price / item.quantity
-                    ).toFixed(2)}) - $${itemTotal}\n`;
-                } else {
-                    summary += `• ${item.name} - $${itemTotal}\n`;
-                }
+            this.buildReceiptBlocks(blockBuilder, receipt, {
+                index,
+                showActions: true,
             });
-            summary += `*Extra Fees:* $${receipt.extraFee.toFixed(2)}\n`;
-            summary += `*Total:* $${totalPrice}`;
-
-            blockBuilder.addSectionBlock({
-                text: blockBuilder.newMarkdownTextObject(summary),
-            });
-
-            blockBuilder.addActionsBlock({
-                elements: [
-                    blockBuilder.newButtonElement({
-                        text: blockBuilder.newPlainTextObject("🗑️ Delete"),
-                        actionId: "delete-receipt-data",
-                        value: JSON.stringify({
-                            messageId: receipt.messageId,
-                            roomId: receipt.roomId,
-                            threadId: receipt.threadId,
-                            userId: receipt.userId
-                        }),
-                        style: ButtonStyle.DANGER,
-                    }),
-                ],
-            });
-
             if (index < receipts.length - 1) {
                 blockBuilder.addDividerBlock();
             }
@@ -160,6 +200,16 @@ export class ReceiptHandler {
                     2
                 )}`
             ),
+        });
+    }
+
+    public formatSingleReceiptBlocks(
+        blockBuilder: BlockBuilder,
+        receipt: IReceiptData
+    ): void {
+        this.buildReceiptBlocks(blockBuilder, receipt, {
+            showActions: false,
+            showSuccess: true,
         });
     }
 
@@ -285,6 +335,41 @@ export class ReceiptHandler {
         }
     }
 
+    public async listReceiptDataByRoomUserAndDateRange(
+        sender: IUser,
+        room: IRoom,
+        appUser: IUser,
+        startDate: string,
+        endDate: string,
+        threadId: string | undefined
+    ): Promise<void> {
+        try {
+            const receipts =
+                await this.receiptService.getReceiptsByUserAndRoomAndDateRange(
+                    sender.id,
+                    room.id,
+                    startDate,
+                    endDate
+                );
+            await this.displayReceipts(
+                receipts,
+                room,
+                appUser,
+                `No receipts found from ${startDate} to ${endDate}.`,
+                this.modify,
+                threadId
+            );
+        } catch (error) {
+            await sendMessage(
+                this.modify,
+                appUser,
+                room,
+                FAILED_GET_RECEIPTS_RESPONSE,
+                threadId
+            );
+        }
+    }
+
     public async listReceiptDataByThread(
         threadId: string,
         room: IRoom,
@@ -350,10 +435,16 @@ export class ReceiptHandler {
         }
     }
 
-    public async getReceiptsForUpdate(roomId: string, threadId: string | undefined): Promise<IReceiptData[] | null> {
+    public async getReceiptsForUpdate(
+        roomId: string,
+        threadId: string | undefined
+    ): Promise<IReceiptData[] | null> {
         try {
             if (threadId) {
-                return await this.receiptService.getReceiptsByThread(roomId, threadId);
+                return await this.receiptService.getReceiptsByThread(
+                    roomId,
+                    threadId
+                );
             } else {
                 return await this.receiptService.getReceiptsByRoom(roomId);
             }
@@ -369,6 +460,62 @@ export class ReceiptHandler {
         roomId: string,
         messageId: string
     ): Promise<void> {
-        await this.receiptService.deleteReceipt(roomId, threadId, messageId, userId)
+        await this.receiptService.deleteReceipt(
+            roomId,
+            threadId,
+            messageId,
+            userId
+        );
+    }
+
+    public async updateReceiptData(
+        updatedData: IReceiptData,
+        room: IRoom,
+        appUser: IUser
+    ): Promise<void> {
+        try {
+            updatedData.totalPrice = this.calculateReceiptTotal(updatedData);
+            await this.receiptService.updateReceipt(updatedData);
+            const blockBuilder = this.modify.getCreator().getBlockBuilder();
+            this.formatSingleReceiptBlocks(blockBuilder, updatedData);
+            const message = this.modify
+                .getCreator()
+                .startMessage()
+                .setSender(appUser)
+                .setRoom(room)
+                .setBlocks(blockBuilder);
+
+            if (updatedData.threadId) {
+                message.setThreadId(updatedData.threadId);
+            }
+
+            await this.modify.getCreator().finish(message);
+        } catch (error) {
+            console.error("Error updating receipt:", error);
+            await sendMessage(
+                this.modify,
+                appUser,
+                room,
+                "❌ Failed to update the receipt. Please try again.",
+                updatedData.threadId ?? undefined
+            );
+        }
+    }
+
+    public async getModals(modalId: string) {
+        return this.receiptService.getModals(modalId);
+    }
+
+    public async deleteModal(modalId: string) {
+        return this.receiptService.deleteModal(modalId);
+    }
+
+    private calculateReceiptTotal(receipt: IReceiptData): number {
+        const itemsTotal = receipt.items.reduce(
+            (sum, item) => sum + item.price * item.quantity,
+            0
+        );
+        const finalTotal = itemsTotal + receipt.extraFee;
+        return Number(finalTotal.toFixed(2));
     }
 }

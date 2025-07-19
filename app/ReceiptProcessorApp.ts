@@ -30,20 +30,23 @@ import {
     RECEIPT_PROCESSOR_INSTRUCTIONS,
     RECEIPT_SCAN_PROMPT,
     COMMAND_TRANSLATION_PROMPT_COMMANDS,
-    COMMAND_TRANSLATION_PROMPT_EXAMPLES
+    COMMAND_TRANSLATION_PROMPT_EXAMPLES,
 } from "./src/const/prompt";
 import {
     IUIKitInteractionHandler,
     UIKitBlockInteractionContext,
     IUIKitResponse,
+    UIKitViewSubmitInteractionContext,
+    UIKitViewCloseInteractionContext,
 } from "@rocket.chat/apps-engine/definition/uikit";
 import { BotHandler } from "./src/handler/botHandler";
 import { ChannelService } from "./src/service/channelService";
 import { CommandHandler } from "./src/commands/UserCommandHandler";
 import {
     COMMAND_TRANSLATION_PROMPT,
-    RESPONSE_PROMPT
-} from "./src/prompt_library/const/prompt"
+    RESPONSE_PROMPT,
+} from "./src/prompt_library/const/prompt";
+import { createEditReceiptModal } from "./src/modals/editReceiptModal";
 
 export class ReceiptProcessorApp
     extends App
@@ -140,9 +143,7 @@ export class ReceiptProcessorApp
                 cleanedMessage,
                 message,
                 read,
-                http,
-                persistence,
-                modify
+                http
             );
         }
     }
@@ -198,9 +199,7 @@ export class ReceiptProcessorApp
                 cleanedMessage,
                 message,
                 read,
-                http,
-                persistence,
-                modify
+                http
             );
         } else {
             await sendMessage(
@@ -429,14 +428,18 @@ export class ReceiptProcessorApp
         message: IMessage,
         read: IRead,
         http: IHttp,
-        persistence: IPersistence,
-        modify: IModify
     ): Promise<void> {
         try {
             this.getLogger().info(`Processing text command: "${messageText}"`);
             const botHandler = new BotHandler(http, read);
-            const commandTranslationPrompt = COMMAND_TRANSLATION_PROMPT(COMMAND_TRANSLATION_PROMPT_COMMANDS, COMMAND_TRANSLATION_PROMPT_EXAMPLES, messageText)
-            const commandJson = await botHandler.processResponse(commandTranslationPrompt);
+            const commandTranslationPrompt = COMMAND_TRANSLATION_PROMPT(
+                COMMAND_TRANSLATION_PROMPT_COMMANDS,
+                COMMAND_TRANSLATION_PROMPT_EXAMPLES,
+                messageText
+            );
+            const commandJson = await botHandler.processResponse(
+                commandTranslationPrompt
+            );
 
             this.getLogger().info("Command JSON:", commandJson);
             const parsedCommand = JSON.parse(commandJson);
@@ -495,29 +498,20 @@ export class ReceiptProcessorApp
 
     private extractParams(message: string): any {
         const params: any = {};
-        const dateMatch = message.match(
-            /(\d{4}-\d{2}-\d{2})|today|yesterday|tomorrow/i
+        const dateRangeMatch = message.match(
+            /from\s+(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})/i
         );
-        if (dateMatch) {
-            if (dateMatch[0].match(/\d{4}-\d{2}-\d{2}/)) {
-                params.date = dateMatch[0];
-            } else {
-                const today = new Date();
-                switch (dateMatch[0].toLowerCase()) {
-                    case "today":
-                        params.date = today.toISOString().split("T")[0];
-                        break;
-                    case "yesterday":
-                        const yesterday = new Date(today);
-                        yesterday.setDate(yesterday.getDate() - 1);
-                        params.date = yesterday.toISOString().split("T")[0];
-                        break;
-                    case "tomorrow":
-                        const tomorrow = new Date(today);
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        params.date = tomorrow.toISOString().split("T")[0];
-                        break;
-                }
+
+        if (dateRangeMatch) {
+            params.startDate = dateRangeMatch[1];
+            params.endDate = dateRangeMatch[2];
+        } else {
+            const dateMatch = message.match(
+                /(?:(?:from|for|on)\s+)?(\d{4}-\d{2}-\d{2})/i
+            );
+
+            if (dateMatch && dateMatch[1]) {
+                params.date = dateMatch[1];
             }
         }
 
@@ -566,6 +560,17 @@ export class ReceiptProcessorApp
             if (data.message && appUser) {
                 await modify.getDeleter().deleteMessage(data.message, appUser);
             }
+        } else if (data.actionId === "edit-receipt-data") {
+            const blockBuilder = modify.getCreator().getBlockBuilder();
+            const modal = await createEditReceiptModal(
+                blockBuilder,
+                receiptData,
+                persistence
+            );
+
+            return context
+                .getInteractionResponder()
+                .openModalViewResponse(modal);
         } else if (data.actionId === "cancel-save-receipt" && appUser) {
             const builder = modify
                 .getCreator()
@@ -676,5 +681,112 @@ export class ReceiptProcessorApp
             `Has image: ${hasImageAttachment}, Bot mentioned: ${isBotMentioned}, Has command: ${hasReceiptCommand}`
         );
         return hasImageAttachment || hasReceiptCommand;
+    }
+
+    public async executeViewSubmitHandler(
+        context: UIKitViewSubmitInteractionContext,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify
+    ): Promise<IUIKitResponse> {
+        this.getLogger().info("Block action handler called!");
+        const { user, view } = context.getInteractionData();
+        const modalId = view.id;
+        const logger = this.getLogger();
+        logger.info(modalId);
+        logger.info("executeViewSubmitHandler called");
+        logger.info("User:", user);
+        logger.info("View:", view);
+
+        const receiptHandler = new ReceiptHandler(
+            persistence,
+            read.getPersistenceReader(),
+            modify
+        );
+
+        try {
+            const state = view.state as any;
+            logger.info("Modal state:", JSON.stringify(state, null, 2));
+
+            const receiptDate = state["receipt-edit-form"]?.receiptDate;
+            const extraFee = Number(state["extra-fee"]?.extraFee || 0);
+            const totalPrice = Number(state["total-price"]?.totalPrice || 0);
+
+            logger.info("Extracted fields:", {
+                receiptDate,
+                extraFee,
+                totalPrice,
+            });
+
+            const items: IReceiptItem[] = [];
+            let index = 0;
+            while (state[`item-name-${index}`]) {
+                const name = state[`item-name-${index}`]?.[`itemName-${index}`];
+                const quantity = Number(
+                    state[`item-quantity-${index}`]?.[
+                        `itemQuantity-${index}`
+                    ] || 0
+                );
+                const price = Number(
+                    state[`item-price-${index}`]?.[`itemPrice-${index}`] || 0
+                );
+
+                logger.info(`Item ${index}:`, { name, quantity, price });
+                if (name) {
+                    items.push({ name, quantity, price });
+                }
+
+                index++;
+            }
+
+            const stored = await receiptHandler.getModals(modalId);
+            const originalData = stored as IReceiptData;
+            logger.info("Original data:", originalData);
+
+            const roomId = originalData.roomId;
+            logger.info("Room Id : " + roomId);
+
+            const room = await read.getRoomReader().getById(roomId);
+            if (!room) {
+                this.getLogger().error(`Room not found for id: ${roomId}`);
+                return context.getInteractionResponder().errorResponse();
+            }
+
+            const updatedData: IReceiptData = {
+                userId: originalData.userId,
+                messageId: originalData.messageId,
+                threadId: originalData.threadId,
+                roomId: originalData.roomId,
+                uploadedDate: originalData.uploadedDate,
+
+                receiptDate,
+                extraFee,
+                totalPrice,
+                items,
+            };
+
+            logger.info("Updated data:", JSON.stringify(updatedData, null, 2));
+            if (!receiptDate || items.length === 0) {
+                logger.error("Validation failed: Missing required fields");
+                return context.getInteractionResponder().errorResponse();
+            }
+
+            await receiptHandler.updateReceiptData(updatedData, room, user);
+            await receiptHandler.deleteModal(modalId);
+
+            logger.info("Receipt updated successfully");
+            return context.getInteractionResponder().successResponse();
+        } catch (error) {
+            logger.error("Error in executeViewSubmitHandler:", error);
+            return context.getInteractionResponder().errorResponse();
+        }
+    }
+
+    public async executeViewClosedHandler(
+        context: UIKitViewCloseInteractionContext,
+    ): Promise<IUIKitResponse> {
+        this.getLogger().info("Modal was closed (not submitted).");
+        return context.getInteractionResponder().successResponse();
     }
 }

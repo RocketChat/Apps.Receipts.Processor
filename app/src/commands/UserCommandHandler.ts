@@ -10,31 +10,24 @@ import { ReceiptHandler } from "../handler/receiptHandler";
 import { ChannelService } from "../service/channelService";
 import { sendMessage } from "../utils/message";
 import { CommandParams, CommandResult } from "../types/command";
+import { INVALID_DATE_RESPONSE } from "../const/response";
 
 function parseDateString(dateStr: string): string | undefined {
     if (!dateStr) return undefined;
-    const today = new Date();
-    switch (dateStr.toLowerCase()) {
-        case "today":
-            return today.toISOString().split("T")[0];
-        case "yesterday":
-        case "previous day": {
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-            return yesterday.toISOString().split("T")[0];
+
+    const normalized = dateStr.replace(/\//g, "-");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        const dateParts = normalized.split('-');
+        const year = parseInt(dateParts[0], 10);
+        const month = parseInt(dateParts[1], 10) - 1;
+        const day = parseInt(dateParts[2], 10);
+        const date = new Date(year, month, day);
+
+        if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
+            return normalized;
         }
-        case "tomorrow": {
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            return tomorrow.toISOString().split("T")[0];
-        }
-        default:
-            const normalized = dateStr.replace(/\//g, "-");
-            if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-                return normalized;
-            }
-            return undefined;
     }
+    return undefined;
 }
 
 export class CommandHandler {
@@ -100,14 +93,40 @@ export class CommandHandler {
                     );
 
                 case "date":
+                    const parsedDateParam = params?.date ? parseDateString(params.date) : undefined;
                     return await this.listReceiptsByDate(
                         user,
                         room,
                         appUser,
                         this.modify,
-                        params?.date,
+                        parsedDateParam,
                         threadId
                     );
+
+                case "date_range":
+                    const startDate = params?.startDate ? parseDateString(params.startDate) : undefined;
+                    const endDate = params?.endDate ? parseDateString(params.endDate) : undefined;
+
+                    if (startDate && endDate) {
+                        return await this.listReceiptsByDateRange(
+                            user,
+                            room,
+                            appUser,
+                            this.modify,
+                            startDate,
+                            endDate,
+                            threadId
+                        );
+                    } else {
+                        sendMessage(
+                            this.modify,
+                            appUser,
+                            room,
+                            "Please provide a valid start and end date in YYYY-MM-DD format (e.g., 'from 2024-07-01 to 2024-07-31').",
+                            threadId
+                        );
+                        return { success: false, message: "Invalid date range parameters." };
+                    }
 
                 case "thread":
                     return await this.listReceiptsInThread(
@@ -226,45 +245,21 @@ export class CommandHandler {
         room: IRoom,
         appUser: IUser,
         modify: IModify,
-        dateStr?: string,
+        parsedDateStr?: string,
         threadId?: string
     ): Promise<CommandResult> {
-        if (!dateStr) {
-            sendMessage(
-                this.modify,
-                appUser,
-                room,
-                "Please provide a date in YYYY-MM-DD format.",
-                threadId
-            );
-            return { success: false };
-        }
-
-        const parsedDateStr = parseDateString(dateStr);
         if (!parsedDateStr) {
             sendMessage(
                 this.modify,
                 appUser,
                 room,
-                "Invalid date format. Please use YYYY-MM-DD, 'today', or 'yesterday'.",
+                "Invalid date. Please use YYYY-MM-DD, 'today', or 'yesterday'.",
                 threadId
             );
             return { success: false };
         }
 
         try {
-            const date = new Date(parsedDateStr);
-            if (isNaN(date.getTime())) {
-                sendMessage(
-                    this.modify,
-                    appUser,
-                    room,
-                    "Invalid date format. Please use YYYY-MM-DD format.",
-                    threadId
-                );
-                return { success: false };
-            }
-
             await this.receiptHandler.listReceiptDataByUserAndUploadDate(
                 parsedDateStr,
                 room,
@@ -279,6 +274,38 @@ export class CommandHandler {
                 appUser,
                 room,
                 "Error processing date. Please use YYYY-MM-DD format.",
+                threadId
+            );
+            return { success: false };
+        }
+    }
+
+    private async listReceiptsByDateRange(
+        user: IUser,
+        room: IRoom,
+        appUser: IUser,
+        modify: IModify,
+        startDateStr: string,
+        endDateStr: string,
+        threadId?: string
+    ): Promise<CommandResult> {
+        try {
+            await this.receiptHandler.listReceiptDataByRoomUserAndDateRange(
+                user,
+                room,
+                appUser,
+                startDateStr,
+                endDateStr,
+                threadId
+            );
+            return { success: true };
+        } catch (error) {
+            this.app.getLogger().error("Error processing date range command:", error);
+            sendMessage(
+                this.modify,
+                appUser,
+                room,
+                "Error processing date range. Please ensure dates are in YYYY-MM-DD format.",
                 threadId
             );
             return { success: false };
@@ -345,8 +372,8 @@ export class CommandHandler {
 
         try {
             await this.receiptHandler.listReceiptDataByThreadAndUser(
+                user.id, // Corrected to pass userId first
                 threadId,
-                user.id,
                 room,
                 appUser
             );
@@ -416,6 +443,7 @@ Available commands:
 - **Show my receipts** - "@bot show me my receipts" / "@bot list my receipts"
 - **Show room receipts** - "@bot show all receipts in this room" / "@bot room receipts"
 - **Show receipts by date** - "@bot show receipts from 2024-01-15" / "@bot receipts from yesterday"
+- **Show receipts by date range** - "@bot show receipts from 2024-07-01 to 2024-07-31" / "@bot show receipts from last week" / "@bot show receipts from last month"
 - **Show thread receipts** - "@bot show receipts in this thread" (must be in thread)
 - **Show my thread receipts** - "@bot show my receipts in this thread" (must be in thread)
 - **Add channel** - "@bot add this channel to my list" / "@bot subscribe to this room"
