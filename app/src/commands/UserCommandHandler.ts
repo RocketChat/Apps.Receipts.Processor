@@ -18,22 +18,18 @@ function parseDateString(dateStr: string): string | undefined {
         case "today":
             return today.toISOString().split("T")[0];
         case "yesterday":
-        case "previous day":
-            {
-                const yesterday = new Date(today);
-                yesterday.setDate(yesterday.getDate() - 1);
-                return yesterday.toISOString().split("T")[0];
-            }
-        case "tomorrow":
-            {
-                const tomorrow = new Date(today);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                return tomorrow.toISOString().split("T")[0];
-            }
+        case "previous day": {
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            return yesterday.toISOString().split("T")[0];
+        }
+        case "tomorrow": {
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            return tomorrow.toISOString().split("T")[0];
+        }
         default:
-            // Normalize slashes to dashes
             const normalized = dateStr.replace(/\//g, "-");
-            // If it's now in YYYY-MM-DD format, return as is
             if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
                 return normalized;
             }
@@ -91,17 +87,24 @@ export class CommandHandler {
                         user,
                         room,
                         appUser,
+                        this.modify,
                         threadId
                     );
 
                 case "room":
-                    return await this.listReceiptsByRoom(room, appUser, threadId);
+                    return await this.listReceiptsByRoom(
+                        room,
+                        appUser,
+                        this.modify,
+                        threadId
+                    );
 
                 case "date":
                     return await this.listReceiptsByDate(
                         user,
                         room,
                         appUser,
+                        this.modify,
                         params?.date,
                         threadId
                     );
@@ -110,6 +113,7 @@ export class CommandHandler {
                     return await this.listReceiptsInThread(
                         room,
                         appUser,
+                        this.modify,
                         threadId
                     );
 
@@ -118,16 +122,12 @@ export class CommandHandler {
                         user,
                         room,
                         appUser,
+                        this.modify,
                         threadId
                     );
 
                 case "add_channel":
-                    return await this.addChannel(
-                        room,
-                        user,
-                        appUser,
-                        threadId
-                    );
+                    return await this.addChannel(room, user, appUser, threadId);
 
                 case "help":
                     return await this.showHelp(appUser, room, threadId);
@@ -167,6 +167,7 @@ export class CommandHandler {
         user: IUser,
         room: IRoom,
         appUser: IUser,
+        modify: IModify,
         threadId?: string
     ): Promise<CommandResult> {
         try {
@@ -195,6 +196,7 @@ export class CommandHandler {
     private async listReceiptsByRoom(
         room: IRoom,
         appUser: IUser,
+        modify: IModify,
         threadId?: string
     ): Promise<CommandResult> {
         try {
@@ -223,6 +225,7 @@ export class CommandHandler {
         user: IUser,
         room: IRoom,
         appUser: IUser,
+        modify: IModify,
         dateStr?: string,
         threadId?: string
     ): Promise<CommandResult> {
@@ -237,7 +240,6 @@ export class CommandHandler {
             return { success: false };
         }
 
-        // Parse and normalize the date string
         const parsedDateStr = parseDateString(dateStr);
         if (!parsedDateStr) {
             sendMessage(
@@ -286,6 +288,7 @@ export class CommandHandler {
     private async listReceiptsInThread(
         room: IRoom,
         appUser: IUser,
+        modify: IModify,
         threadId?: string
     ): Promise<CommandResult> {
         if (!threadId) {
@@ -326,6 +329,7 @@ export class CommandHandler {
         user: IUser,
         room: IRoom,
         appUser: IUser,
+        modify: IModify,
         threadId?: string
     ): Promise<CommandResult> {
         if (!threadId) {
@@ -420,13 +424,7 @@ Available commands:
 **Note:** You can upload receipt images without mentioning me - I'll process them automatically!
         `;
 
-        sendMessage(
-            this.modify,
-            appUser,
-            room,
-            helpMessage.trim(),
-            threadId
-        );
+        sendMessage(this.modify, appUser, room, helpMessage.trim(), threadId);
         return { success: true };
     }
 

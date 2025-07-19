@@ -1,6 +1,9 @@
 import { IPersistence, IPersistenceRead } from "@rocket.chat/apps-engine/definition/accessors";
 import { IReceiptData } from "../types/receipt";
 import { Associations } from "../utils/associations";
+import {
+    RocketChatAssociationRecord,
+} from "@rocket.chat/apps-engine/definition/metadata";
 import * as ReceiptRepository from "../repository/receiptRepository";
 
 export class ReceiptService {
@@ -51,5 +54,19 @@ export class ReceiptService {
 
         const records =  await ReceiptRepository.getReceipts(this.persistenceRead, [roomAssociationKey, threadAssociationKey, userAssociationKey])
         return records as IReceiptData[];
+    }
+
+    public async deleteReceipt(roomId, threadId, messageId, userId: string) {
+        const associations: RocketChatAssociationRecord[] = [
+            Associations.withRoom(roomId),
+            Associations.withMessage(messageId),
+            Associations.withUserReceipts(userId)
+        ]
+
+        if (threadId) {
+            associations.push(Associations.withThread(threadId));
+        }
+
+        await ReceiptRepository.deleteReceipt(this.persistence, associations)
     }
 }
