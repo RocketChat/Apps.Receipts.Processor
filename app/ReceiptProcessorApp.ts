@@ -14,7 +14,10 @@ import {
     IPostMessageSent,
 } from "@rocket.chat/apps-engine/definition/messages";
 import { getAPIConfig, settings } from "./src/config/settings";
-import { sendMessage, sendConfirmationButtons } from "./src/utils/message";
+import {
+    sendMessage,
+    sendConfirmationButtons,
+} from "./src/utils/message";
 import {
     GENERAL_ERROR_RESPONSE,
     INVALID_IMAGE_RESPONSE,
@@ -48,6 +51,7 @@ import {
 } from "./src/prompt_library/const/prompt";
 import { createEditReceiptModal } from "./src/modals/editReceiptModal";
 import { CommandParseHandler } from "./src/commands/CommandParserHandler";
+import { ISpendingReport } from "./src/types/receipt";
 
 export class ReceiptProcessorApp
     extends App

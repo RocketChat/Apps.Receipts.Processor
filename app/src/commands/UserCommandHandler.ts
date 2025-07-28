@@ -13,6 +13,10 @@ import { sendMessage } from "../utils/message";
 import { CommandParams, CommandResult } from "../types/command";
 import { BotHandler } from "../handler/botHandler";
 import { RESPONSE_PROMPT } from "../../src/prompt_library/const/prompt";
+import { CREATE_REPORT_INSTRUCTIONS } from "../const/prompt";
+import { ReceiptService } from "../service/receiptService";
+import { ISpendingReport } from "../types/receipt";
+import { sendDownloadablePDF } from "../utils/pdfGenerator";
 
 function parseDateString(dateStr: string): string | undefined {
     if (!dateStr) return undefined;
@@ -38,6 +42,7 @@ function parseDateString(dateStr: string): string | undefined {
 
 export class CommandHandler {
     private receiptHandler: ReceiptHandler;
+    private receiptService: ReceiptService;
     private channelService: ChannelService;
     private botHandler: BotHandler;
     private app: ReceiptProcessorApp;
@@ -56,6 +61,10 @@ export class CommandHandler {
             this.persistence,
             this.read.getPersistenceReader(),
             this.modify
+        );
+        this.receiptService = new ReceiptService(
+            persistence,
+            this.read.getPersistenceReader()
         );
         this.channelService = new ChannelService(
             this.persistence,
@@ -106,6 +115,7 @@ export class CommandHandler {
             "export",
             "search",
             "find",
+            "summary",
         ];
 
         return keywords.some((keyword) => lowerText.includes(keyword));
@@ -243,6 +253,9 @@ export class CommandHandler {
 
                 case "help":
                     return await this.showHelp(appUser, room, threadId);
+
+                case "spending_report":
+                    return await this.showReport(room, user, appUser, threadId);
 
                 case "unknown":
                 default:
@@ -521,6 +534,40 @@ export class CommandHandler {
             );
             return { success: false };
         }
+    }
+
+    private async showReport(
+        room: IRoom,
+        user: IUser,
+        appUser: IUser,
+        threadId?: string
+    ): Promise<CommandResult> {
+        sendMessage(this.modify, appUser, room, "Generating your PDF", threadId);
+        const receiptDatas = await this.receiptService.getReceiptsByUserAndRoom(
+            user.id,
+            room.id
+        );
+        const receiptJSON = JSON.stringify(receiptDatas, null, 2);
+        const processResponse = await this.botHandler.processResponse(
+            CREATE_REPORT_INSTRUCTIONS(receiptJSON)
+        );
+
+        const cleanJSON = processResponse
+            .replace(/```json\s*([\s\S]*?)```/i, "$1")
+            .replace(/```([\s\S]*?)```/g, "$1")
+            .trim();
+        const report: ISpendingReport = JSON.parse(cleanJSON);
+        await sendDownloadablePDF(
+            this.modify,
+            appUser,
+            room,
+            "spending_report.pdf",
+            report,
+            "Here is your spending report.",
+            threadId
+        );
+
+        return { success: true };
     }
 
     private async showHelp(
