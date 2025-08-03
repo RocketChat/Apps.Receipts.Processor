@@ -4,7 +4,10 @@ import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { ButtonStyle } from "@rocket.chat/apps-engine/definition/uikit";
 import { IReceiptData } from "../types/receipt";
 import { IUploadDescriptor } from "@rocket.chat/apps-engine/definition/uploads/IUploadDescriptor";
-import { IMessageFile } from "@rocket.chat/apps-engine/definition/messages";
+import {
+    IMessageFile,
+    IMessageAttachment,
+} from "@rocket.chat/apps-engine/definition/messages";
 
 export async function sendMessage(
     modify: IModify,
@@ -130,26 +133,33 @@ export async function sendDownloadableFile(
             .setSender(user)
             .setRoom(room);
 
+        const type = fileType === "csv" ? "text/csv" : fileType === "pdf" ? "application/pdf" : "text/plain"
+
         if (threadId) {
             fileMessageBuilder.setThreadId(threadId);
+            const attachment: IMessageAttachment = {
+                title: {
+                    value: fileNameWithExtension,
+                    link: uploadResult.url,
+                },
+                type: type,
+                description: fileNameWithExtension,
+            };
+
+            fileMessageBuilder.setAttachments([attachment]);
+            await modify.getCreator().finish(fileMessageBuilder);
+        } else {
+            const messageFile: IMessageFile = {
+                _id: uploadResult.id,
+                name: fileNameWithExtension,
+                type: type,
+            };
+            const messageData = fileMessageBuilder.getMessage();
+            fileMessageBuilder.setData(messageData);
+            messageData.file = messageFile;
+
+            await modify.getCreator().finish(fileMessageBuilder);
         }
-
-        const messageFile: IMessageFile = {
-            _id: uploadResult.id,
-            name: fileNameWithExtension,
-            type:
-                fileType === "csv"
-                    ? "text/csv"
-                    : fileType === "pdf"
-                    ? "application/pdf"
-                    : "text/plain",
-        };
-
-        const messageData = fileMessageBuilder.getMessage();
-        fileMessageBuilder.setData(messageData);
-        messageData.file = messageFile;
-
-        await modify.getCreator().finish(fileMessageBuilder);
     } catch (error) {
         const errorBuilder = modify
             .getCreator()

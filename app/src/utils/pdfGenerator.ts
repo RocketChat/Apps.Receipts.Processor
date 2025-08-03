@@ -46,7 +46,7 @@ export async function sendDownloadablePDF(
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
     const colors: ColorScheme = {
-        primary: [41, 128, 185],
+        primary: [245, 69, 92],
         secondary: [52, 73, 94],
         accent: [46, 204, 113],
         light: [236, 240, 241],
@@ -56,19 +56,15 @@ export async function sendDownloadablePDF(
     };
 
     createHeader(doc, pageWidth, colors);
-
-    createTitleSection(doc, data, colors);
-
-    const summaryY = createSummaryCards(doc, data, pageWidth, colors);
-
-    let currentY = summaryY + 20;
+    createTitleSection(doc, data, colors, room);
+    const summaryY = createSummarySection(doc, data, 60, colors);
+    const cardsY = createSummaryCards(doc, data, pageWidth, colors, summaryY);
+    let currentY = Math.max(summaryY, cardsY) + 20;
     currentY = createCategoriesSection(doc, data, currentY, colors);
-
     createFooter(doc, pageHeight, colors);
 
     const pdfArrayBuffer = doc.output("arraybuffer");
     const pdfContent = Buffer.from(pdfArrayBuffer).toString("base64");
-
     await sendDownloadableFile(
         modify,
         user,
@@ -76,8 +72,7 @@ export async function sendDownloadablePDF(
         fileName,
         pdfContent,
         "pdf",
-        message ||
-            `📊 Modern spending report with ${data.categories.length} categories ready for download`,
+        message || `📊 spending report with ${data.categories.length} categories ready for download`,
         threadId
     );
 }
@@ -97,14 +92,14 @@ function createHeader(doc: jsPDF, pageWidth: number, colors: ColorScheme): void 
     doc.text(`Generated on ${today}`, pageWidth - 20, 16, { align: 'right' });
 }
 
-function createTitleSection(doc: jsPDF, data: ISpendingReport, colors: ColorScheme): void {
+function createTitleSection(doc: jsPDF, data: ISpendingReport, colors: ColorScheme, room: IRoom): void {
     doc.setFillColor(colors.light[0], colors.light[1], colors.light[2]);
     doc.rect(0, 25, doc.internal.pageSize.width, 20, 'F');
 
     doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('Spending Summary Report', 20, 35);
+    doc.text('Spending Summary Report for ' + room.displayName, 20, 35);
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
@@ -115,25 +110,49 @@ function createTitleSection(doc: jsPDF, data: ISpendingReport, colors: ColorSche
     );
 }
 
+function createSummarySection(
+    doc: jsPDF,
+    data: ISpendingReport,
+    startY: number,
+    colors: ColorScheme
+): number {
+    if (!data.summary) {
+        return startY;
+    }
+
+    doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Summary & Insights', 20, startY);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+
+    const summaryLines = doc.splitTextToSize(data.summary, doc.internal.pageSize.width - 40);
+    doc.text(summaryLines, 20, startY + 8);
+
+    return startY + 8 + summaryLines.length * 6;
+}
+
 function createSummaryCards(
     doc: jsPDF,
     data: ISpendingReport,
     pageWidth: number,
-    colors: ColorScheme
+    colors: ColorScheme,
+    startY = 55
 ): number {
-    const startY = 55;
     const cardWidth = (pageWidth - 80) / 4;
     const cardHeight = 25;
-    const totalSpent = data.categories.reduce(
-        (sum, cat) =>
-            sum +
-            cat.items.reduce((catSum, item) => catSum + item.price * item.quantity, 0),
-        0
-    );
 
     const totalCategories = data.categories.length;
     const totalItems = data.categories.reduce((sum, cat) => sum + cat.items.length, 0);
     const extraFee = data.extraFee || 0;
+    const totalSpent = data.categories.reduce(
+        (sum, cat) =>
+            sum +
+            cat.items.reduce((catSum, item) => catSum + item.price * item.quantity, 0), 0
+    ) + extraFee;
 
     createSummaryCard(
         doc,

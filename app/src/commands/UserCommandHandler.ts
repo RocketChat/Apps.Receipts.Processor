@@ -561,35 +561,37 @@ export class CommandHandler {
             this.modify,
             appUser,
             room,
-            "Generating your PDF",
+            "Generating your report",
             threadId
         );
 
         let receiptDatas: IReceiptData[];
-        if (startDate && endDate) {
-            receiptDatas =
-                await this.receiptService.getReceiptsByUserAndRoomAndDateRange(
-                    user.id,
-                    room.id,
-                    startDate,
-                    endDate
-                );
+        if(threadId) {
+            receiptDatas = await this.receiptService.getReceiptsByThread(room.id, threadId)
         } else {
-            receiptDatas = await this.receiptService.getReceiptsByUserAndRoom(
-                user.id,
-                room.id
-            );
+            if (startDate && endDate) {
+                receiptDatas =
+                    await this.receiptService.getReceiptsByUserAndRoomAndDateRange(
+                        user.id,
+                        room.id,
+                        startDate,
+                        endDate
+                    );
+            } else {
+                receiptDatas = await this.receiptService.getReceiptsByUserAndRoom(
+                    user.id,
+                    room.id
+                );
+            }
         }
 
         const receiptJSON = JSON.stringify(receiptDatas, null, 2);
-
         const prompt =
             category && category.trim()
                 ? CREATE_CATEGORY_REPORT_INSTRUCTIONS(receiptJSON, category)
                 : CREATE_REPORT_INSTRUCTIONS(receiptJSON);
 
         const processResponse = await this.botHandler.processResponse(prompt);
-
         if (category && category.trim() && !processResponse.trim()) {
             await sendMessage(
                 this.modify,
@@ -626,7 +628,6 @@ export class CommandHandler {
         const extraFee = this.receiptHandler.calculateTotalExtraFee(receiptDatas)
         const report: ISpendingReport = JSON.parse(cleanJSON);
         report.extraFee = extraFee
-
         await sendDownloadablePDF(
             this.modify,
             appUser,

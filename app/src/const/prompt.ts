@@ -80,7 +80,7 @@ Your task is to extract and return data from the image which include only items 
   'receipt_date': '05-01-2025'
 }
 
-ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT IS UNACCEPTABLE
+ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT BESIDE JSON IS UNACCEPTABLE
 `;
 
 export const RECEIPT_VALIDATION_PROMPT = `
@@ -198,6 +198,7 @@ Your task is to analyze the receipts and generate a summary report for spending 
 - Ignore receipt date and use uploadedDate instead
 - startDate: The earliest uploaded date in the data
 - endDate: The latest uploaded date in the data
+- summary: A brief summary of the user's purchases and a comment on their purchase habits. For example, mention which categories they spend the most on, any noticeable trends, or suggestions for improvement.
 - categories: An array of objects, each with:
   - category: The name of the category (e.g., Food, Household, etc.)
   - items: An array of objects, each with:
@@ -210,6 +211,7 @@ Your task is to analyze the receipts and generate a summary report for spending 
 {
   "startDate": "2024-06-01",
   "endDate": "2024-06-30",
+  "summary": "Most of your spending was on Food, especially Milk and Bread. You made frequent purchases in the Food category, indicating a focus on daily essentials. Consider monitoring your spending on snacks if you wish to save more.",
   "categories": [
     {
       "category": "Food",
@@ -257,6 +259,7 @@ Your task is to analyze the receipts and generate a summary report for spending 
 - Ignore receipt date and use uploadedDate instead
 - startDate: The earliest uploaded date in the data
 - endDate: The latest uploaded date in the data
+- summary: A brief summary of the user's purchases in the "${category}" category and a comment on their purchase habits in this category. For example, mention the most purchased items, spending trends, or suggestions.
 - categories: An array of objects, each with:
   - category: The name of the category (e.g., Food, Household, etc.)
   - items: An array of objects, each with:
@@ -273,6 +276,7 @@ Your task is to analyze the receipts and generate a summary report for spending 
 {
   "startDate": "2024-06-01",
   "endDate": "2024-06-30",
+  "summary": "You spent the most on Milk in the Food category. Your purchases are consistent, focusing on daily essentials. Consider buying in bulk to save more.",
   "categories": [
     {
       "category": "${category}",
