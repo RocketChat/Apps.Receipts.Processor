@@ -111,7 +111,10 @@ export const COMMAND_TRANSLATION_PROMPT_COMMANDS = `
 - "thread" - Show all receipts in current thread (must be in thread)
 - "thread_user" - Show user's receipts in current thread (must be in thread)
 - "add_channel" - Add current room to user's channel list
-- "spending_report" - Create a report in PDF Format about the user spending
+- "spending_report" - Create a report in PDF Format about the user spending.
+    - Optional parameters:
+        - startDate, endDate (for date range)
+        - category (for filtering by category, e.g., Food, Electronics, etc.)
 - "help" - Show available commands
 - "unknown" - When request doesn't match any command
 `;
@@ -142,6 +145,9 @@ User: "create a spending report" → { "command": "spending_report" }
 User: "generate spending report for last month" → { "command": "spending_report", "params": { "startDate": "2024-06-01", "endDate": "2024-06-30" } }
 User: "spending report from 2024-07-01 to 2024-07-31" → { "command": "spending_report", "params": { "startDate": "2024-07-01", "endDate": "2024-07-31" } }
 User: "show my spending summary" → { "command": "spending_report" }
+User: "show my food spending" → { "command": "spending_report", "params": { "category": "Food" } }
+User: "generate electronics spending report for last month" → { "command": "spending_report", "params": { "startDate": "2024-06-01", "endDate": "2024-06-30", "category": "Electronics" } }
+User: "spending report for household items" → { "command": "spending_report", "params": { "category": "Household" } }
 `;
 
 export const RECEIPT_PROCESSOR_INSTRUCTIONS = `
@@ -235,4 +241,52 @@ Your task is to analyze the receipts and generate a summary report for spending 
 \`\`\`
 
 **Return only the object in valid JSON format without extra characters. Include all categories and all items found in the data.**
+`;
+
+export const CREATE_CATEGORY_REPORT_INSTRUCTIONS = (
+  data: string,
+  category: string
+) => `
+You are given the following receipt data:
+
+${data}
+
+Your task is to analyze the receipts and generate a summary report for spending tracking.
+
+**Return the result as a single object** with the following structure:
+- Ignore receipt date and use uploadedDate instead
+- startDate: The earliest uploaded date in the data
+- endDate: The latest uploaded date in the data
+- categories: An array of objects, each with:
+  - category: The name of the category (e.g., Food, Household, etc.)
+  - items: An array of objects, each with:
+    - name: The name of the item
+    - quantity: The total quantity purchased in the given period
+    - price: The total amount spent on this item in the given period
+
+**Only include the category: "${category}" in the output. Ignore all other categories.**
+
+**If there are no items in the "${category}" category, return nothing (an empty string).**
+
+**Example output:**
+\`\`\`json
+{
+  "startDate": "2024-06-01",
+  "endDate": "2024-06-30",
+  "categories": [
+    {
+      "category": "${category}",
+      "items": [
+        {
+          "name": "Example Item",
+          "quantity": 2,
+          "price": 20000
+        }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+**Return only the object in valid JSON format without extra characters. If the "${category}" category is not found, return nothing (an empty string).**
 `;

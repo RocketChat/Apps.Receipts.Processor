@@ -122,7 +122,7 @@ function createSummaryCards(
     colors: ColorScheme
 ): number {
     const startY = 55;
-    const cardWidth = (pageWidth - 60) / 3;
+    const cardWidth = (pageWidth - 80) / 4;
     const cardHeight = 25;
     const totalSpent = data.categories.reduce(
         (sum, cat) =>
@@ -133,6 +133,7 @@ function createSummaryCards(
 
     const totalCategories = data.categories.length;
     const totalItems = data.categories.reduce((sum, cat) => sum + cat.items.length, 0);
+    const extraFee = data.extraFee || 0;
 
     createSummaryCard(
         doc,
@@ -167,6 +168,18 @@ function createSummaryCards(
         'Total Items',
         totalItems.toString(),
         colors.accent,
+        colors
+    );
+
+    createSummaryCard(
+        doc,
+        50 + cardWidth * 3,
+        startY,
+        cardWidth,
+        cardHeight,
+        'Extra Fees',
+        `$${extraFee.toFixed(2)}`,
+        colors.secondary,
         colors
     );
 

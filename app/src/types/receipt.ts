@@ -25,4 +25,5 @@ export interface ISpendingReport {
     startDate: string;
     endDate: string;
     categories: ICategory[];
+    extraFee: number;
 }

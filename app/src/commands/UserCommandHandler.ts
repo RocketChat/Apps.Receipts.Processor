@@ -13,9 +13,12 @@ import { sendMessage } from "../utils/message";
 import { CommandParams, CommandResult } from "../types/command";
 import { BotHandler } from "../handler/botHandler";
 import { RESPONSE_PROMPT } from "../../src/prompt_library/const/prompt";
-import { CREATE_REPORT_INSTRUCTIONS } from "../const/prompt";
+import {
+    CREATE_REPORT_INSTRUCTIONS,
+    CREATE_CATEGORY_REPORT_INSTRUCTIONS,
+} from "../const/prompt";
 import { ReceiptService } from "../service/receiptService";
-import { ISpendingReport } from "../types/receipt";
+import { ISpendingReport, IReceiptData } from "../types/receipt";
 import { sendDownloadablePDF } from "../utils/pdfGenerator";
 
 function parseDateString(dateStr: string): string | undefined {
@@ -166,6 +169,13 @@ export class CommandHandler {
                 };
             }
 
+            const startDate = params?.startDate
+                ? parseDateString(params.startDate)
+                : undefined;
+            const endDate = params?.endDate
+                ? parseDateString(params.endDate)
+                : undefined;
+
             this.app.getLogger().info(`Executing command: ${command}`, params);
 
             switch (command) {
@@ -200,13 +210,6 @@ export class CommandHandler {
                     );
 
                 case "date_range":
-                    const startDate = params?.startDate
-                        ? parseDateString(params.startDate)
-                        : undefined;
-                    const endDate = params?.endDate
-                        ? parseDateString(params.endDate)
-                        : undefined;
-
                     if (startDate && endDate) {
                         return await this.listReceiptsByDateRange(
                             user,
@@ -255,7 +258,16 @@ export class CommandHandler {
                     return await this.showHelp(appUser, room, threadId);
 
                 case "spending_report":
-                    return await this.showReport(room, user, appUser, threadId);
+                    const category = params?.category;
+                    return await this.showReport(
+                        room,
+                        user,
+                        appUser,
+                        threadId,
+                        category,
+                        startDate,
+                        endDate
+                    );
 
                 case "unknown":
                 default:
@@ -540,23 +552,81 @@ export class CommandHandler {
         room: IRoom,
         user: IUser,
         appUser: IUser,
-        threadId?: string
+        threadId?: string,
+        category?: string,
+        startDate?: string,
+        endDate?: string
     ): Promise<CommandResult> {
-        sendMessage(this.modify, appUser, room, "Generating your PDF", threadId);
-        const receiptDatas = await this.receiptService.getReceiptsByUserAndRoom(
-            user.id,
-            room.id
+        sendMessage(
+            this.modify,
+            appUser,
+            room,
+            "Generating your PDF",
+            threadId
         );
+
+        let receiptDatas: IReceiptData[];
+        if (startDate && endDate) {
+            receiptDatas =
+                await this.receiptService.getReceiptsByUserAndRoomAndDateRange(
+                    user.id,
+                    room.id,
+                    startDate,
+                    endDate
+                );
+        } else {
+            receiptDatas = await this.receiptService.getReceiptsByUserAndRoom(
+                user.id,
+                room.id
+            );
+        }
+
         const receiptJSON = JSON.stringify(receiptDatas, null, 2);
-        const processResponse = await this.botHandler.processResponse(
-            CREATE_REPORT_INSTRUCTIONS(receiptJSON)
-        );
+
+        const prompt =
+            category && category.trim()
+                ? CREATE_CATEGORY_REPORT_INSTRUCTIONS(receiptJSON, category)
+                : CREATE_REPORT_INSTRUCTIONS(receiptJSON);
+
+        const processResponse = await this.botHandler.processResponse(prompt);
+
+        if (category && category.trim() && !processResponse.trim()) {
+            await sendMessage(
+                this.modify,
+                appUser,
+                room,
+                `No data found for category "${category}".`,
+                threadId
+            );
+            return {
+                success: false,
+                message: `No data for category "${category}"`,
+            };
+        }
 
         const cleanJSON = processResponse
             .replace(/```json\s*([\s\S]*?)```/i, "$1")
             .replace(/```([\s\S]*?)```/g, "$1")
             .trim();
+
+        if (!cleanJSON) {
+            await sendMessage(
+                this.modify,
+                appUser,
+                room,
+                `No data found for category "${category}".`,
+                threadId
+            );
+            return {
+                success: false,
+                message: `No data for category "${category}"`,
+            };
+        }
+
+        const extraFee = this.receiptHandler.calculateTotalExtraFee(receiptDatas)
         const report: ISpendingReport = JSON.parse(cleanJSON);
+        report.extraFee = extraFee
+
         await sendDownloadablePDF(
             this.modify,
             appUser,

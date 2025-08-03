@@ -518,4 +518,8 @@ export class ReceiptHandler {
         const finalTotal = itemsTotal + receipt.extraFee;
         return Number(finalTotal.toFixed(2));
     }
+
+    public calculateTotalExtraFee(receipts: IReceiptData[]): number {
+        return receipts.reduce((sum, receipt) => sum + (receipt.extraFee || 0), 0);
+    }
 }
