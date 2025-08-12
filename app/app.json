@@ -48,6 +48,9 @@
             "name": "upload.read"
         },
         {
+            "name": "upload.write"
+        },
+        {
             "name": "persistence"
         },
         {

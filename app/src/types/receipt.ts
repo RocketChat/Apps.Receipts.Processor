@@ -15,3 +15,16 @@ export interface IReceiptData {
     uploadedDate: string;
     receiptDate: string;
 }
+
+export interface ICategory {
+    category: string;
+    items: IReceiptItem[];
+}
+
+export interface ISpendingReport {
+    startDate: string;
+    endDate: string;
+    categories: ICategory[];
+    summary: string;
+    extraFee: number;
+}

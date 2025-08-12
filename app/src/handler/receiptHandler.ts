@@ -10,7 +10,7 @@ import { IReceiptData, IReceiptItem } from "../types/receipt";
 import {
     EMPTY_ROOM_RECEIPTS_RESPONSE,
     FAILED_GET_RECEIPTS_RESPONSE,
-    INVALID_IMAGE_RESPONSE,
+    GENERAL_ERROR_RESPONSE
 } from "../const/response";
 import { sendMessage } from "../utils/message";
 import { ReceiptService } from "../service/receiptService";
@@ -71,7 +71,7 @@ export class ReceiptHandler {
                 typeof parsedData.extra_fees !== "number" ||
                 typeof parsedData.total_price !== "number"
             ) {
-                return INVALID_IMAGE_RESPONSE;
+                return GENERAL_ERROR_RESPONSE;
             }
 
             const receiptData: IReceiptData = {
@@ -98,7 +98,7 @@ export class ReceiptHandler {
 
             return JSON.stringify(receiptData);
         } catch (error) {
-            return INVALID_IMAGE_RESPONSE;
+            return GENERAL_ERROR_RESPONSE;
         }
     }
 
@@ -517,5 +517,9 @@ export class ReceiptHandler {
         );
         const finalTotal = itemsTotal + receipt.extraFee;
         return Number(finalTotal.toFixed(2));
+    }
+
+    public calculateTotalExtraFee(receipts: IReceiptData[]): number {
+        return receipts.reduce((sum, receipt) => sum + (receipt.extraFee || 0), 0);
     }
 }

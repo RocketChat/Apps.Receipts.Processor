@@ -7,6 +7,8 @@
     },
     "dependencies": {
         "@rocket.chat/icons": "^0.38.0",
-        "@rocket.chat/ui-kit": "^0.36.1"
+        "@rocket.chat/ui-kit": "^0.36.1",
+        "jspdf": "^3.0.1",
+        "jspdf-autotable": "^5.0.2"
     }
 }

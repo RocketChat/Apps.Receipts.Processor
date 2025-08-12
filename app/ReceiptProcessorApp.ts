@@ -14,12 +14,13 @@ import {
     IPostMessageSent,
 } from "@rocket.chat/apps-engine/definition/messages";
 import { getAPIConfig, settings } from "./src/config/settings";
-import { sendMessage, sendConfirmationButtons } from "./src/utils/message";
+import {
+    sendMessage,
+    sendConfirmationButtons,
+} from "./src/utils/message";
 import {
     GENERAL_ERROR_RESPONSE,
     INVALID_IMAGE_RESPONSE,
-    SUCCESSFUL_IMAGE_DETECTION_RESPONSE,
-    PROCESSING_IMAGE_RESPONSE,
     INVALID_SETTINGS_RESPONSE,
 } from "./src/const/response";
 import { ReceiptCommand } from "./src/commands/ReceiptCommand";
@@ -31,6 +32,8 @@ import {
     RECEIPT_SCAN_PROMPT,
     COMMAND_TRANSLATION_PROMPT_COMMANDS,
     COMMAND_TRANSLATION_PROMPT_EXAMPLES,
+    RECEIPT_CONFIRMATION_INSTRUCTIONS,
+    RECEIPT_PROCESSING_INSTRUCTIONS,
 } from "./src/const/prompt";
 import {
     IUIKitInteractionHandler,
@@ -40,19 +43,23 @@ import {
     UIKitViewCloseInteractionContext,
 } from "@rocket.chat/apps-engine/definition/uikit";
 import { BotHandler } from "./src/handler/botHandler";
-import { ChannelService } from "./src/service/channelService";
+import { ChannelHandler } from "./src/handler/channelHandler";
 import { CommandHandler } from "./src/commands/UserCommandHandler";
 import {
     COMMAND_TRANSLATION_PROMPT,
     RESPONSE_PROMPT,
 } from "./src/prompt_library/const/prompt";
 import { createEditReceiptModal } from "./src/modals/editReceiptModal";
+import { CommandParseHandler } from "./src/commands/CommandParserHandler";
+import { ISpendingReport } from "./src/types/receipt";
 
 export class ReceiptProcessorApp
     extends App
     implements IPostMessageSent, IUIKitInteractionHandler
 {
     private commandHandler: CommandHandler | undefined;
+    private channelHandler: ChannelHandler | undefined;
+    private botHandler: BotHandler | undefined;
     private appUsername: string | undefined;
 
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
@@ -70,6 +77,16 @@ export class ReceiptProcessorApp
                 new ReceiptCommand(this)
             ),
         ]);
+    }
+
+    private async getAppUser() {
+        const appUser = await this.getAccessors()
+            .reader.getUserReader()
+            .getAppUser(this.getID());
+        if (!appUser) {
+            this.getLogger().error("App user not found. Message not sent.");
+        }
+        return appUser;
     }
 
     public async executePostMessageSent(
@@ -92,40 +109,68 @@ export class ReceiptProcessorApp
             this.appUsername = appUser.username;
         }
 
-        const userChannels = await this.getUserChannels(
-            userId,
-            persistence,
-            read
-        );
-        const isBotMentioned = await this.isBotMentioned(message, read);
-        const isAddChannel = this.isAddChannelCommand(message.text || "");
-        if (!userChannels || !userChannels.includes(roomId)) {
-            await this.handleUnregisteredChannel(
-                isBotMentioned,
-                isAddChannel,
-                message,
-                read,
-                http,
-                persistence,
-                modify,
-                appUser
-            );
-            return;
-        }
         if (!this.commandHandler) {
             this.commandHandler = new CommandHandler(
                 read,
                 modify,
                 persistence,
+                http,
                 this,
                 appUser
             );
         }
+
+        if (!this.channelHandler) {
+            this.channelHandler = new ChannelHandler(read, persistence);
+        }
+
+        if (!this.botHandler) {
+            this.botHandler = new BotHandler(http, read);
+        }
+
+        const userChannels = await this.channelHandler.getUserChannels(userId);
+        const isBotMentioned = await this.botHandler.isBotMentioned(
+            message,
+            appUser
+        );
+        const isAddChannel = CommandParseHandler.isAddChannelCommand(
+            message.text || ""
+        );
+        if (!userChannels || !userChannels.includes(roomId)) {
+            await this.channelHandler.handleUnregisteredChannel(
+                isBotMentioned,
+                isAddChannel,
+                message,
+                modify,
+                appUser,
+                (messageText: string) =>
+                    this.processTextCommand(
+                        messageText,
+                        message,
+                        read,
+                        http,
+                        modify
+                    )
+            );
+            return;
+        }
+
         const hasImageAttachment =
             message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
         const messageText = message.text?.trim() || "";
         const isTextCommand =
-            this.isReceiptCommand(messageText) && isBotMentioned;
+            CommandParseHandler.isReceiptCommand(messageText) && isBotMentioned;
+        const { modelType, apiKey, apiEndpoint } = await getAPIConfig(read);
+        if (modelType == "" || apiKey == "" || apiEndpoint == "") {
+            await sendMessage(
+                modify,
+                appUser,
+                message.room,
+                INVALID_SETTINGS_RESPONSE,
+                message.threadId
+            );
+            return;
+        }
 
         if (hasImageAttachment) {
             await this.processImageMessage(
@@ -137,168 +182,18 @@ export class ReceiptProcessorApp
                 appUser
             );
         } else if (isTextCommand && messageText) {
-            const cleanedMessage = this.removeBotMention(messageText);
+            this.getLogger().info("IsTextCommand YES");
+            const cleanedMessage =
+                this.botHandler.removeBotMention(messageText);
             this.getLogger().info(`Cleaned message: "${cleanedMessage}"`);
             await this.processTextCommand(
                 cleanedMessage,
                 message,
                 read,
-                http
+                http,
+                modify
             );
         }
-    }
-
-    private async getAppUser() {
-        const appUser = await this.getAccessors()
-            .reader.getUserReader()
-            .getAppUser(this.getID());
-        if (!appUser) {
-            this.getLogger().error("App user not found. Message not sent.");
-        }
-        return appUser;
-    }
-
-    private async getUserChannels(
-        userId: string,
-        persistence: IPersistence,
-        read: IRead
-    ): Promise<string[] | undefined> {
-        const channelService = new ChannelService(
-            persistence,
-            read.getPersistenceReader()
-        );
-        const userChannels = await channelService.getChannels(
-            userId,
-            this.getLogger()
-        );
-        this.getLogger().info(`User channels for ${userId}:`, userChannels);
-        return userChannels;
-    }
-
-    private async handleUnregisteredChannel(
-        isBotMentioned: boolean,
-        isAddChannel: boolean,
-        message: IMessage,
-        read: IRead,
-        http: IHttp,
-        persistence: IPersistence,
-        modify: IModify,
-        appUser: any
-    ): Promise<void> {
-        const roomId = message.room.id;
-        const userId = message.sender.id;
-        this.getLogger().info(
-            `Room ${roomId} is not in user ${userId}'s channel list. Ignoring message.`
-        );
-
-        if (!isBotMentioned) return;
-
-        if (isAddChannel) {
-            const cleanedMessage = this.removeBotMention(message.text || "");
-            await this.processTextCommand(
-                cleanedMessage,
-                message,
-                read,
-                http
-            );
-        } else {
-            await sendMessage(
-                modify,
-                appUser,
-                message.room,
-                "This channel is not registered. Please use `add channel` command to register it.",
-                message.threadId
-            );
-        }
-    }
-
-    private async isBotMentioned(
-        message: IMessage,
-        read: IRead
-    ): Promise<boolean> {
-        try {
-            const messageText = message.text?.toLowerCase() || "";
-
-            if (!messageText) {
-                return false;
-            }
-
-            const appUser = await read.getUserReader().getAppUser(this.getID());
-            if (!appUser || !appUser.username) {
-                this.getLogger().error(
-                    "Could not get app user or username for mention detection"
-                );
-                return false;
-            }
-
-            const botUsername = appUser.username.toLowerCase();
-            const mentionPatterns = [
-                new RegExp(
-                    `@${this.escapeRegex(botUsername)}(?:[,\\s]|$)`,
-                    "i"
-                ),
-                new RegExp(`^@${this.escapeRegex(botUsername)}\\b`, "i"),
-                new RegExp(`\\b@${this.escapeRegex(botUsername)}\\b`, "i"),
-            ];
-
-            const isMentioned = mentionPatterns.some((pattern) =>
-                pattern.test(messageText)
-            );
-
-            if (isMentioned) {
-                this.getLogger().info(
-                    `Bot mentioned in message: "${message.text}"`
-                );
-                return true;
-            }
-
-            this.getLogger().info(
-                `Bot not mentioned in message: "${message.text}"`
-            );
-            return false;
-        } catch (error) {
-            this.getLogger().error("Error checking bot mention:", error);
-            return false;
-        }
-    }
-
-    private escapeRegex(string: string): string {
-        return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    }
-
-    private removeBotMention(messageText: string): string {
-        if (!this.appUsername) return messageText;
-
-        const mentionPatterns = [
-            new RegExp(`@${this.escapeRegex(this.appUsername)}[,\\s]*`, "gi"),
-            new RegExp(`^@${this.escapeRegex(this.appUsername)}\\s*`, "gi"),
-            new RegExp(`\\s*@${this.escapeRegex(this.appUsername)}\\s*`, "gi"),
-        ];
-
-        let cleanedText = messageText;
-        mentionPatterns.forEach((pattern) => {
-            cleanedText = cleanedText.replace(pattern, " ");
-        });
-
-        return cleanedText.trim();
-    }
-
-    private isAddChannelCommand(messageText: string): boolean {
-        if (!messageText) return false;
-        const lower = messageText.toLowerCase();
-        const addChannelPhrases = [
-            "add channel",
-            "register channel",
-            "add this channel",
-            "register this channel",
-            "add current channel",
-            "register current channel",
-            "add this room",
-            "register this room",
-            "add room",
-            "register room",
-        ];
-        return addChannelPhrases.some((phrase) => lower.includes(phrase));
     }
 
     private async processImageMessage(
@@ -309,15 +204,15 @@ export class ReceiptProcessorApp
         modify: IModify,
         appUser: any
     ): Promise<void> {
-        const imageProcessor = new ImageHandler(http, read);
-        const isReceipt = await imageProcessor.validateImage(message);
+        const imageHandler = new ImageHandler(http, read);
+        const isReceipt = await imageHandler.validateImage(message);
         this.getLogger().info("Receipt:", isReceipt);
 
         const messageId = message.id;
         const threadId = message.threadId;
         const userId = message.sender.id;
         const { modelType, apiKey, apiEndpoint } = await getAPIConfig(read);
-        if (modelType == "" || apiKey == "" || apiEndpoint == "") {
+        if (modelType === "" || apiKey === "" || apiEndpoint === "") {
             await sendMessage(
                 modify,
                 appUser,
@@ -325,7 +220,9 @@ export class ReceiptProcessorApp
                 INVALID_SETTINGS_RESPONSE,
                 threadId
             );
+            return;
         }
+
         if (isReceipt && messageId) {
             const receiptHandler = new ReceiptHandler(
                 persistence,
@@ -333,14 +230,24 @@ export class ReceiptProcessorApp
                 modify
             );
             const botHandler = new BotHandler(http, read);
+            const context = "The user just uploaded photo of a valid receipt";
+            const processResponse = await botHandler.processResponse(
+                RESPONSE_PROMPT(
+                    context,
+                    "",
+                    RECEIPT_PROCESSING_INSTRUCTIONS,
+                    ""
+                )
+            );
             await sendMessage(
                 modify,
                 appUser,
                 message.room,
-                PROCESSING_IMAGE_RESPONSE,
+                processResponse,
                 threadId
             );
-            const response = await imageProcessor.processImage(
+
+            const response = await imageHandler.processImage(
                 message,
                 RECEIPT_SCAN_PROMPT
             );
@@ -376,11 +283,14 @@ export class ReceiptProcessorApp
                         receiptDate: parsedResult.receiptDate,
                     };
 
+                    const context = "The user just uploaded photo of a receipt";
+                    const response =
+                        "Ask the user if they want to save the data or not ?";
                     const question = await botHandler.processResponse(
                         RESPONSE_PROMPT(
-                            "The user just uploaded photo of a receipt",
+                            context,
                             result,
-                            "Ask the user if they want to save the data or not ?",
+                            response,
                             RECEIPT_PROCESSOR_INSTRUCTIONS
                         )
                     );
@@ -428,13 +338,16 @@ export class ReceiptProcessorApp
         message: IMessage,
         read: IRead,
         http: IHttp,
+        modify: IModify
     ): Promise<void> {
         try {
             this.getLogger().info(`Processing text command: "${messageText}"`);
             const botHandler = new BotHandler(http, read);
+            const currentDate = new Date().toISOString().slice(0, 10);
+
             const commandTranslationPrompt = COMMAND_TRANSLATION_PROMPT(
                 COMMAND_TRANSLATION_PROMPT_COMMANDS,
-                COMMAND_TRANSLATION_PROMPT_EXAMPLES,
+                COMMAND_TRANSLATION_PROMPT_EXAMPLES(currentDate),
                 messageText
             );
             const commandJson = await botHandler.processResponse(
@@ -443,8 +356,9 @@ export class ReceiptProcessorApp
 
             this.getLogger().info("Command JSON:", commandJson);
             const parsedCommand = JSON.parse(commandJson);
-            const params =
-                parsedCommand.params || this.extractParams(messageText);
+            let params =
+                parsedCommand.params ||
+                CommandParseHandler.extractParams(commandJson);
             if (this.commandHandler) {
                 await this.commandHandler.executeCommand(
                     parsedCommand.command,
@@ -468,63 +382,6 @@ export class ReceiptProcessorApp
         }
     }
 
-    private isReceiptCommand(messageText: string): boolean {
-        if (!messageText) return false;
-
-        const lowerText = messageText.toLowerCase();
-        const keywords = [
-            "receipt",
-            "receipts",
-            "show",
-            "list",
-            "display",
-            "my receipts",
-            "room receipts",
-            "thread receipts",
-            "add channel",
-            "help",
-            "date",
-            "yesterday",
-            "today",
-            "spending",
-            "total",
-            "export",
-            "search",
-            "find",
-        ];
-
-        return keywords.some((keyword) => lowerText.includes(keyword));
-    }
-
-    private extractParams(message: string): any {
-        const params: any = {};
-        const dateRangeMatch = message.match(
-            /from\s+(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})/i
-        );
-
-        if (dateRangeMatch) {
-            params.startDate = dateRangeMatch[1];
-            params.endDate = dateRangeMatch[2];
-        } else {
-            const dateMatch = message.match(
-                /(?:(?:from|for|on)\s+)?(\d{4}-\d{2}-\d{2})/i
-            );
-
-            if (dateMatch && dateMatch[1]) {
-                params.date = dateMatch[1];
-            }
-        }
-
-        const searchMatch = message.match(
-            /(?:with|for|containing|about)\s+(.+)/i
-        );
-        if (searchMatch) {
-            params.searchTerm = searchMatch[1].trim();
-        }
-
-        return Object.keys(params).length > 0 ? params : undefined;
-    }
-
     public async executeBlockActionHandler(
         context: UIKitBlockInteractionContext,
         read: IRead,
@@ -534,32 +391,50 @@ export class ReceiptProcessorApp
     ): Promise<IUIKitResponse> {
         this.getLogger().info("Block action handler called!");
         const data = context.getInteractionData();
-        const appUser = await read.getUserReader().getAppUser();
+        const appUser = await this.getAppUser();
         const receiptHandler = new ReceiptHandler(
             persistence,
             read.getPersistenceReader(),
             modify
         );
+        const botHandler = new BotHandler(http, read);
         const receiptData = data.value ? JSON.parse(data.value) : undefined;
 
         if (data.actionId === "confirm-save-receipt" && appUser) {
             this.getLogger().info("Receipt Data : ", receiptData);
-            await receiptHandler.addReceiptData(receiptData);
+            const addReceiptPromise =
+                receiptHandler.addReceiptData(receiptData);
+            const deleteMessagePromise =
+                data.message && appUser
+                    ? modify.getDeleter().deleteMessage(data.message, appUser)
+                    : Promise.resolve();
+            const context = "The user just saved the receipt data";
+            const processResponsePromise = botHandler.processResponse(
+                RESPONSE_PROMPT(
+                    context,
+                    data.value ? data.value : "",
+                    RECEIPT_CONFIRMATION_INSTRUCTIONS,
+                    ""
+                )
+            );
+
+            const [_, processResponse] = await Promise.all([
+                addReceiptPromise,
+                processResponsePromise,
+                deleteMessagePromise,
+            ]);
+
             const builder = modify
                 .getCreator()
                 .startMessage()
                 .setSender(appUser)
                 .setRoom(data.room!)
-                .setText(SUCCESSFUL_IMAGE_DETECTION_RESPONSE);
+                .setText(processResponse);
 
             if (receiptData.threadId) {
                 builder.setThreadId(receiptData.threadId);
             }
             await modify.getCreator().finish(builder);
-
-            if (data.message && appUser) {
-                await modify.getDeleter().deleteMessage(data.message, appUser);
-            }
         } else if (data.actionId === "edit-receipt-data") {
             const blockBuilder = modify.getCreator().getBlockBuilder();
             const modal = await createEditReceiptModal(
@@ -661,21 +536,32 @@ export class ReceiptProcessorApp
         return context.getInteractionResponder().successResponse();
     }
 
-    public async checkPostMessageSent(message: IMessage): Promise<boolean> {
+    public async checkPostMessageSent(
+        message: IMessage,
+        read: IRead,
+        http: IHttp
+    ): Promise<boolean> {
         this.getLogger().info("Message Attachments:", message.attachments);
         this.getLogger().info("Message ID:", message.id);
         this.getLogger().info("Thread ID:", message.threadId);
         this.getLogger().info("Message text:", message.text);
+        const appUser = await this.getAppUser();
+        if (!appUser) return false;
 
         const hasImageAttachment =
             message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
 
-        const isBotMentioned = await this.isBotMentioned(
+        if (!this.botHandler) {
+            this.botHandler = new BotHandler(http, read);
+        }
+
+        const isBotMentioned = await this.botHandler.isBotMentioned(
             message,
-            this.getAccessors().reader
+            appUser
         );
         const hasReceiptCommand =
-            this.isReceiptCommand(message.text || "") && isBotMentioned;
+            CommandParseHandler.isReceiptCommand(message.text || "") &&
+            isBotMentioned;
 
         this.getLogger().info(
             `Has image: ${hasImageAttachment}, Bot mentioned: ${isBotMentioned}, Has command: ${hasReceiptCommand}`
@@ -693,11 +579,6 @@ export class ReceiptProcessorApp
         this.getLogger().info("Block action handler called!");
         const { user, view } = context.getInteractionData();
         const modalId = view.id;
-        const logger = this.getLogger();
-        logger.info(modalId);
-        logger.info("executeViewSubmitHandler called");
-        logger.info("User:", user);
-        logger.info("View:", view);
 
         const receiptHandler = new ReceiptHandler(
             persistence,
@@ -707,17 +588,9 @@ export class ReceiptProcessorApp
 
         try {
             const state = view.state as any;
-            logger.info("Modal state:", JSON.stringify(state, null, 2));
-
             const receiptDate = state["receipt-edit-form"]?.receiptDate;
             const extraFee = Number(state["extra-fee"]?.extraFee || 0);
             const totalPrice = Number(state["total-price"]?.totalPrice || 0);
-
-            logger.info("Extracted fields:", {
-                receiptDate,
-                extraFee,
-                totalPrice,
-            });
 
             const items: IReceiptItem[] = [];
             let index = 0;
@@ -732,7 +605,6 @@ export class ReceiptProcessorApp
                     state[`item-price-${index}`]?.[`itemPrice-${index}`] || 0
                 );
 
-                logger.info(`Item ${index}:`, { name, quantity, price });
                 if (name) {
                     items.push({ name, quantity, price });
                 }
@@ -742,10 +614,7 @@ export class ReceiptProcessorApp
 
             const stored = await receiptHandler.getModals(modalId);
             const originalData = stored as IReceiptData;
-            logger.info("Original data:", originalData);
-
             const roomId = originalData.roomId;
-            logger.info("Room Id : " + roomId);
 
             const room = await read.getRoomReader().getById(roomId);
             if (!room) {
@@ -766,25 +635,21 @@ export class ReceiptProcessorApp
                 items,
             };
 
-            logger.info("Updated data:", JSON.stringify(updatedData, null, 2));
             if (!receiptDate || items.length === 0) {
-                logger.error("Validation failed: Missing required fields");
                 return context.getInteractionResponder().errorResponse();
             }
 
             await receiptHandler.updateReceiptData(updatedData, room, user);
             await receiptHandler.deleteModal(modalId);
 
-            logger.info("Receipt updated successfully");
             return context.getInteractionResponder().successResponse();
         } catch (error) {
-            logger.error("Error in executeViewSubmitHandler:", error);
             return context.getInteractionResponder().errorResponse();
         }
     }
 
     public async executeViewClosedHandler(
-        context: UIKitViewCloseInteractionContext,
+        context: UIKitViewCloseInteractionContext
     ): Promise<IUIKitResponse> {
         this.getLogger().info("Modal was closed (not submitted).");
         return context.getInteractionResponder().successResponse();

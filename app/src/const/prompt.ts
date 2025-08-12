@@ -1,5 +1,5 @@
 export const OCR_SYSTEM_PROMPT =
-"You are a precision-focused OCR system specialized in extracting receipt data. Your only output format is JSON without any other text or messages.";
+    "You are a precision-focused OCR system specialized in extracting receipt data. Your only output format is JSON without any other text or messages.";
 
 export const RECEIPT_SCAN_PROMPT = `
 You are an OCR system that extracts receipt details in **JSON FORMAT ONLY**.
@@ -80,8 +80,8 @@ Your task is to extract and return data from the image which include only items 
   'receipt_date': '05-01-2025'
 }
 
-ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT IS UNACCEPTABLE
-`
+ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT BESIDE JSON IS UNACCEPTABLE
+`;
 
 export const RECEIPT_VALIDATION_PROMPT = `
 You are an OCR system that determines whether an uploaded image is a **RECEIPT** or not. Your response must follow these strict rules.
@@ -100,7 +100,7 @@ You are an OCR system that determines whether an uploaded image is a **RECEIPT**
   { "is_receipt": false }
 
 ONLY RETURN THE JSON RESPONSE EXACTLY AS SHOWN ABOVE. ANY OTHER OUTPUT IS UNACCEPTABLE.
-`
+`;
 
 export const COMMAND_TRANSLATION_PROMPT_COMMANDS = `
 **Available Commands:**
@@ -111,24 +111,44 @@ export const COMMAND_TRANSLATION_PROMPT_COMMANDS = `
 - "thread" - Show all receipts in current thread (must be in thread)
 - "thread_user" - Show user's receipts in current thread (must be in thread)
 - "add_channel" - Add current room to user's channel list
+- "spending_report" - Create a report in PDF Format about the user spending.
+    - Optional parameters:
+        - startDate, endDate (for date range)
+        - category (for filtering by category, e.g., Food, Electronics, etc.)
 - "help" - Show available commands
 - "unknown" - When request doesn't match any command
-`
+`;
 
-export const COMMAND_TRANSLATION_PROMPT_EXAMPLES = `
+export const COMMAND_TRANSLATION_PROMPT_EXAMPLES = (current_date: string) => `
+Today's Date is ${current_date}
 **Examples:**
 User: "show me my receipts" → { "command": "list" }
 User: "show all receipts in this room" → { "command": "room" }
 User: "show receipts from 2024-01-15" → { "command": "date", "params": { "date": "2024-01-15" } }
 User: "show receipts on 2024-01-15" → { "command": "date", "params": { "date": "2024-01-15" } }
 User: "show receipts for 2024-01-15" → { "command": "date", "params": { "date": "2024-01-15" } }
+User: "show receipts for today" → { "command": "date", "params": { "date": "2024-07-19" } }
+User: "show receipts for yesterday" → { "command": "date", "params": { "date": "2024-07-18" } }
+User: "show receipts for tomorrow" → { "command": "date", "params": { "date": "2024-07-20" } }
+User: "show receipts for last week" → { "command": "date_range", "params": { "startDate": "2024-07-08", "endDate": "2024-07-14" } }
+User: "show receipts for last month" → { "command": "date_range", "params": { "startDate": "2024-06-01", "endDate": "2024-06-30" } }
+User: "show receipts for 3 days ago" → { "command": "date", "params": { "date": "2024-07-16" } }
+User: "show receipts for 2 weeks ago" → { "command": "date_range", "params": { "startDate": "2024-07-01", "endDate": "2024-07-14" } }
+User: "show receipts for 10 days ago" → { "command": "date_range", "params": { "startDate": "2024-07-01", "endDate": "2024-07-10" } }
 User: "show receipts from 2024-07-01 to 2024-07-31" → { "command": "date_range", "params": { "startDate": "2024-07-01", "endDate": "2024-07-31" } }
 User: "show receipts in this thread" → { "command": "thread" }
 User: "show my receipts in this thread" → { "command": "thread_user" }
 User: "add this channel" → { "command": "add_channel" }
 User: "help me" → { "command": "help" }
 User: "what's the weather?" → { "command": "unknown" }
-`
+User: "create a spending report" → { "command": "spending_report" }
+User: "generate spending report for last month" → { "command": "spending_report", "params": { "startDate": "2024-06-01", "endDate": "2024-06-30" } }
+User: "spending report from 2024-07-01 to 2024-07-31" → { "command": "spending_report", "params": { "startDate": "2024-07-01", "endDate": "2024-07-31" } }
+User: "show my spending summary" → { "command": "spending_report" }
+User: "show my food spending" → { "command": "spending_report", "params": { "category": "Food" } }
+User: "generate electronics spending report for last month" → { "command": "spending_report", "params": { "startDate": "2024-06-01", "endDate": "2024-06-30", "category": "Electronics" } }
+User: "spending report for household items" → { "command": "spending_report", "params": { "category": "Household" } }
+`;
 
 export const RECEIPT_PROCESSOR_INSTRUCTIONS = `
 - If the receipt was processed successfully, summarize the key details (e.g., merchant, date, total amount).
@@ -150,4 +170,127 @@ Total: $70.74
 - If the user asks a question, answer it based on the available data.
 - Keep your response clear and helpful.
 - Do not include technical jargon or internal system details.
-`
+`;
+
+export const RECEIPT_CONFIRMATION_INSTRUCTIONS = `
+1. Confirm the receipt is saved.
+2. Make a friendly, casual comment about the receipt (e.g., the items, amount, or something interesting).
+3. Use a warm, conversational tone—avoid being formal or robotic.
+
+Examples:
+- "Saved your receipt! Coffee and pastries—yum! Was it a special treat?"
+- "Receipt saved! Big bookstore haul—any book you're excited about?
+`;
+
+export const RECEIPT_PROCESSING_INSTRUCTIONS =
+`Let the user know, in a friendly and conversational way, that the image they sent appears to be a receipt. Reassure them that you'll take care of extracting and processing the information from it for them. make sure the message you sent
+doesn't include "" to make it more human-like conversation`
+
+
+export const CREATE_REPORT_INSTRUCTIONS = (data: string) => `
+You are given the following receipt data:
+
+${data}
+
+Your task is to analyze the receipts and generate a summary report for spending tracking.
+
+**Return the result as a single object** with the following structure:
+- Ignore receipt date and use uploadedDate instead
+- startDate: The earliest uploaded date in the data
+- endDate: The latest uploaded date in the data
+- summary: A brief summary of the user's purchases and a comment on their purchase habits. For example, mention which categories they spend the most on, any noticeable trends, or suggestions for improvement.
+- categories: An array of objects, each with:
+  - category: The name of the category (e.g., Food, Household, etc.)
+  - items: An array of objects, each with:
+    - name: The name of the item
+    - quantity: The total quantity purchased in the given period
+    - price: The total amount spent on this item in the given period
+
+**Example output:**
+\`\`\`json
+{
+  "startDate": "2024-06-01",
+  "endDate": "2024-06-30",
+  "summary": "Most of your spending was on Food, especially Milk and Bread. You made frequent purchases in the Food category, indicating a focus on daily essentials. Consider monitoring your spending on snacks if you wish to save more.",
+  "categories": [
+    {
+      "category": "Food",
+      "items": [
+        {
+          "name": "Milk",
+          "quantity": 5,
+          "price": 50000
+        },
+        {
+          "name": "Bread",
+          "quantity": 3,
+          "price": 30000
+        }
+      ]
+    },
+    {
+      "category": "Household",
+      "items": [
+        {
+          "name": "Detergent",
+          "quantity": 1,
+          "price": 15000
+        }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+**Return only the object in valid JSON format without extra characters. Include all categories and all items found in the data.**
+`;
+
+export const CREATE_CATEGORY_REPORT_INSTRUCTIONS = (
+  data: string,
+  category: string
+) => `
+You are given the following receipt data:
+
+${data}
+
+Your task is to analyze the receipts and generate a summary report for spending tracking.
+
+**Return the result as a single object** with the following structure:
+- Ignore receipt date and use uploadedDate instead
+- startDate: The earliest uploaded date in the data
+- endDate: The latest uploaded date in the data
+- summary: A brief summary of the user's purchases in the "${category}" category and a comment on their purchase habits in this category. For example, mention the most purchased items, spending trends, or suggestions.
+- categories: An array of objects, each with:
+  - category: The name of the category (e.g., Food, Household, etc.)
+  - items: An array of objects, each with:
+    - name: The name of the item
+    - quantity: The total quantity purchased in the given period
+    - price: The total amount spent on this item in the given period
+
+**Only include the category: "${category}" in the output. Ignore all other categories.**
+
+**If there are no items in the "${category}" category, return nothing (an empty string).**
+
+**Example output:**
+\`\`\`json
+{
+  "startDate": "2024-06-01",
+  "endDate": "2024-06-30",
+  "summary": "You spent the most on Milk in the Food category. Your purchases are consistent, focusing on daily essentials. Consider buying in bulk to save more.",
+  "categories": [
+    {
+      "category": "${category}",
+      "items": [
+        {
+          "name": "Example Item",
+          "quantity": 2,
+          "price": 20000
+        }
+      ]
+    }
+  ]
+}
+\`\`\`
+
+**Return only the object in valid JSON format without extra characters. If the "${category}" category is not found, return nothing (an empty string).**
+`;
