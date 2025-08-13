@@ -1,4 +1,4 @@
-import { formatDateDDMMYY } from "../utils/date"
+import { formatDateDDMMYY } from "../utils/date";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { ISpendingReport } from "../types/receipt";
@@ -23,6 +23,7 @@ export async function sendDownloadablePDF(
     room: IRoom,
     fileName: string,
     data: ISpendingReport,
+    currency: string,
     message?: string,
     threadId?: string
 ): Promise<void> {
@@ -58,9 +59,9 @@ export async function sendDownloadablePDF(
     createHeader(doc, pageWidth, colors);
     createTitleSection(doc, data, colors, room);
     const summaryY = createSummarySection(doc, data, 60, colors);
-    const cardsY = createSummaryCards(doc, data, pageWidth, colors, summaryY);
+    const cardsY = createSummaryCards(doc, data, pageWidth, colors, currency, summaryY);
     let currentY = Math.max(summaryY, cardsY) + 20;
-    currentY = createCategoriesSection(doc, data, currentY, colors);
+    currentY = createCategoriesSection(doc, data, currentY, colors, currency);
     createFooter(doc, pageHeight, colors);
 
     const pdfArrayBuffer = doc.output("arraybuffer");
@@ -72,7 +73,7 @@ export async function sendDownloadablePDF(
         fileName,
         pdfContent,
         "pdf",
-        message || `📊 spending report with ${data.categories.length} categories ready for download`,
+        message || `📊 Spending report with ${data.categories.length} categories ready for download`,
         threadId
     );
 }
@@ -140,69 +141,32 @@ function createSummaryCards(
     data: ISpendingReport,
     pageWidth: number,
     colors: ColorScheme,
+    currency: string, // ✅ Added
     startY = 55
 ): number {
-    const cardWidth = (pageWidth - 80) / 4;
+    const cardWidth = (pageWidth - 80) / 3;
     const cardHeight = 25;
+    const rowSpacing = 30;
 
     const totalCategories = data.categories.length;
     const totalItems = data.categories.reduce((sum, cat) => sum + cat.items.length, 0);
     const extraFee = data.extraFee || 0;
+    const discounts = data.discounts || 0;
     const totalSpent = data.categories.reduce(
         (sum, cat) =>
             sum +
             cat.items.reduce((catSum, item) => catSum + item.price * item.quantity, 0), 0
     ) + extraFee;
 
-    createSummaryCard(
-        doc,
-        20,
-        startY,
-        cardWidth,
-        cardHeight,
-        'Total Spent',
-        `$${totalSpent.toFixed(2)}`,
-        colors.danger,
-        colors
-    );
+    createSummaryCard(doc, 20, startY, cardWidth, cardHeight, 'Total Spent', `${currency}${totalSpent}`, colors.danger, colors);
+    createSummaryCard(doc, 30 + cardWidth, startY, cardWidth, cardHeight, 'Categories', totalCategories.toString(), colors.primary, colors);
+    createSummaryCard(doc, 40 + cardWidth * 2, startY, cardWidth, cardHeight, 'Total Items', totalItems.toString(), colors.accent, colors);
 
-    createSummaryCard(
-        doc,
-        30 + cardWidth,
-        startY,
-        cardWidth,
-        cardHeight,
-        'Categories',
-        totalCategories.toString(),
-        colors.primary,
-        colors
-    );
+    const secondRowStartX = (pageWidth - (cardWidth * 2 + 10)) / 2;
+    createSummaryCard(doc, secondRowStartX, startY + rowSpacing, cardWidth, cardHeight, 'Extra Fees', `${currency}${extraFee}`, colors.secondary, colors);
+    createSummaryCard(doc, secondRowStartX + cardWidth + 10, startY + rowSpacing, cardWidth, cardHeight, 'Discounts', `${currency}${discounts}`, colors.accent, colors);
 
-    createSummaryCard(
-        doc,
-        40 + cardWidth * 2,
-        startY,
-        cardWidth,
-        cardHeight,
-        'Total Items',
-        totalItems.toString(),
-        colors.accent,
-        colors
-    );
-
-    createSummaryCard(
-        doc,
-        50 + cardWidth * 3,
-        startY,
-        cardWidth,
-        cardHeight,
-        'Extra Fees',
-        `$${extraFee.toFixed(2)}`,
-        colors.secondary,
-        colors
-    );
-
-    return startY + cardHeight;
+    return startY + cardHeight + rowSpacing;
 }
 
 function createSummaryCard(
@@ -241,7 +205,8 @@ function createCategoriesSection(
     doc: jsPDF,
     data: ISpendingReport,
     startY: number,
-    colors: ColorScheme
+    colors: ColorScheme,
+    currency: string // ✅ Added
 ): number {
     let currentY = startY;
     doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
@@ -250,7 +215,7 @@ function createCategoriesSection(
     doc.text('Detailed Breakdown by Category', 20, currentY);
     currentY += 15;
 
-    data.categories.forEach((cat, idx) => {
+    data.categories.forEach((cat) => {
         if (currentY > doc.internal.pageSize.height - 60) {
             doc.addPage();
             currentY = 30;
@@ -265,15 +230,15 @@ function createCategoriesSection(
         doc.text(cat.category, 25, currentY + 2);
 
         const categoryTotal = cat.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        doc.text(`$${categoryTotal.toFixed(2)}`, doc.internal.pageSize.width - 25, currentY + 2, { align: 'right' });
+        doc.text(`${currency}${categoryTotal}`, doc.internal.pageSize.width - 25, currentY + 2, { align: 'right' });
 
         currentY += 15;
         const headers = [['Item Name', 'Quantity', 'Unit Price', 'Total']];
         const rows = cat.items.map((item) => [
             item.name,
             item.quantity.toString(),
-            `$${item.price.toFixed(2)}`,
-            `$${(item.price * item.quantity).toFixed(2)}`
+            `${currency}${item.price}`,
+            `${currency}${(item.price * item.quantity)}`
         ]);
 
         autoTable(doc, {

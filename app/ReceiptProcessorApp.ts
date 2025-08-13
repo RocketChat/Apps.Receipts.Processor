@@ -279,13 +279,13 @@ export class ReceiptProcessorApp
                         items: parsedResult.items as IReceiptItem[],
                         extraFee: parsedResult.extraFee,
                         totalPrice: parsedResult.totalPrice,
+                        discounts: parsedResult.discounts,
                         uploadedDate: parsedResult.uploadedDate,
                         receiptDate: parsedResult.receiptDate,
                     };
 
                     const context = "The user just uploaded photo of a receipt";
-                    const response =
-                        "Ask the user if they want to save the data or not ?";
+                    const response = "Ask the user if they want to save the data or not ?";
                     const question = await botHandler.processResponse(
                         RESPONSE_PROMPT(
                             context,
@@ -483,7 +483,8 @@ export class ReceiptProcessorApp
                             .getBlockBuilder();
                         receiptHandler.formatReceiptsSummaryWithBlocks(
                             blockBuilder,
-                            updatedReceipts
+                            updatedReceipts,
+                            receiptData.roomId
                         );
 
                         const updater = await modify
@@ -590,6 +591,7 @@ export class ReceiptProcessorApp
             const state = view.state as any;
             const receiptDate = state["receipt-edit-form"]?.receiptDate;
             const extraFee = Number(state["extra-fee"]?.extraFee || 0);
+            const discounts = Number(state["discounts"]?.extraFee || 0);
             const totalPrice = Number(state["total-price"]?.totalPrice || 0);
 
             const items: IReceiptItem[] = [];
@@ -631,6 +633,7 @@ export class ReceiptProcessorApp
 
                 receiptDate,
                 extraFee,
+                discounts,
                 totalPrice,
                 items,
             };

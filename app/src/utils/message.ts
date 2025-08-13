@@ -70,7 +70,7 @@ export async function sendConfirmationButtons(
             block.newButtonElement({
                 text: block.newPlainTextObject("❌ No"),
                 actionId: "cancel-save-receipt",
-                value: "cancel",
+                value: JSON.stringify(receiptData),
                 style: ButtonStyle.DANGER,
             }),
         ],

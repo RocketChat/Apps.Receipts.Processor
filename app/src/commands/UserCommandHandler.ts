@@ -150,6 +150,11 @@ export class CommandHandler {
             params.searchTerm = searchMatch[1].trim();
         }
 
+        const currencyMatch = message.match(/currency\s+([A-Za-z]{3})/i);
+        if (currencyMatch) {
+            params.currency = currencyMatch[1].toUpperCase();
+        }
+
         return Object.keys(params).length > 0 ? params : undefined;
     }
 
@@ -268,7 +273,8 @@ export class CommandHandler {
                         startDate,
                         endDate
                     );
-
+                case "set_room_currency":
+                    return await this.setRoomCurrency(room, user, appUser, params, threadId);
                 case "unknown":
                 default:
                     return await this.handleUnknownCommand(
@@ -625,15 +631,17 @@ export class CommandHandler {
             };
         }
 
-        const extraFee = this.receiptHandler.calculateTotalExtraFee(receiptDatas)
+        const currency = (await this.channelService.getCurrencyForChannel(room.id)) || "$";
         const report: ISpendingReport = JSON.parse(cleanJSON);
-        report.extraFee = extraFee
+        report.extraFee = this.receiptHandler.calculateTotalExtraFee(receiptDatas)
+        report.discounts = this.receiptHandler.calculateTotalDiscounts(receiptDatas)
         await sendDownloadablePDF(
             this.modify,
             appUser,
             room,
             "spending_report.pdf",
             report,
+            currency,
             "Here is your spending report.",
             threadId
         );
@@ -646,8 +654,8 @@ export class CommandHandler {
         room: IRoom,
         threadId?: string
     ): Promise<CommandResult> {
-        const helpMessage = `
-            👋 **Hi there! I'm here to help you manage your receipts.**
+      const helpMessage = `
+        👋 **Hi there! I'm here to help you manage your receipts.**
 
             Here are some things you can ask me to do:
 
@@ -672,12 +680,23 @@ export class CommandHandler {
             - **Add this channel:**
             Say "@bot add this channel to my list" or "@bot subscribe to this room" to start tracking receipts here.
 
+            - **Set currency for this channel:**
+            Change the currency symbol used in summaries by saying:
+            "@bot set currency to $" or "@bot set currency to EUR" or "@bot set currency to ฿".
+
+            - **Generate spending reports:**
+            Get a summary of your spending by saying:
+            "@bot generate report for this month",
+            "@bot spending report from 2024-07-01 to 2024-07-31",
+            or "@bot monthly report".
+
             - **Need help?**
             Just ask "@bot help" or "@bot what can you do?".
 
             **Tip:** You can also upload receipt images directly—no need to mention me! I’ll process them automatically.
 
-            If you ever get stuck or have a question, just let me know. I’m always here to help!`;
+            If you ever get stuck or have a question, just let me know. I’m always here to help!
+        `;
 
         sendMessage(this.modify, appUser, room, helpMessage.trim(), threadId);
         return { success: true };
@@ -701,5 +720,50 @@ export class CommandHandler {
 
         sendMessage(this.modify, appUser, room, processResponse, threadId);
         return { success: false };
+    }
+
+    private async setRoomCurrency(
+        room: IRoom,
+        user: IUser,
+        appUser: IUser,
+        params?: CommandParams,
+        threadId?: string
+    ): Promise<CommandResult> {
+        try {
+            const currency = params?.currency || params?.searchTerm;
+
+            if (!currency || typeof currency !== "string" || currency.trim() === "") {
+                sendMessage(
+                    this.modify,
+                    appUser,
+                    room,
+                    "❌ Please provide a valid currency code. Example: `set room currency USD`",
+                    threadId
+                );
+                return { success: false, message: "Invalid currency" };
+            }
+
+            await this.channelService.setCurrencyForChannel(room.id, currency.trim().toUpperCase());
+
+            sendMessage(
+                this.modify,
+                appUser,
+                room,
+                `✅ Currency for this room has been set to **${currency.trim().toUpperCase()}**.`,
+                threadId
+            );
+
+            return { success: true };
+        } catch (error) {
+            this.app.getLogger().error("Error setting room currency:", error);
+            sendMessage(
+                this.modify,
+                appUser,
+                room,
+                "❌ Failed to set currency for this room.",
+                threadId
+            );
+            return { success: false };
+        }
     }
 }

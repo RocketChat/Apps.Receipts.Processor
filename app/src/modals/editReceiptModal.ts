@@ -67,6 +67,16 @@ export async function createEditReceiptModal(
             }),
         })
 
+    blockBuilder
+        .addInputBlock({
+            blockId: "discounts",
+            label: blockBuilder.newPlainTextObject("Discounts"),
+            element: blockBuilder.newPlainTextInputElement({
+                actionId: "discounts",
+                initialValue: String(receiptData.discounts),
+            }),
+        })
+
     await persistence.createWithAssociation(
         receiptData,
         new RocketChatAssociationRecord(

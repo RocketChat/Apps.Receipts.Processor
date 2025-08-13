@@ -10,7 +10,7 @@ import { IReceiptData, IReceiptItem } from "../types/receipt";
 import {
     EMPTY_ROOM_RECEIPTS_RESPONSE,
     FAILED_GET_RECEIPTS_RESPONSE,
-    GENERAL_ERROR_RESPONSE
+    GENERAL_ERROR_RESPONSE,
 } from "../const/response";
 import { sendMessage } from "../utils/message";
 import { ReceiptService } from "../service/receiptService";
@@ -19,6 +19,7 @@ import {
     ButtonStyle,
     BlockBuilder,
 } from "@rocket.chat/apps-engine/definition/uikit";
+import { ChannelService } from "../service/channelService";
 
 export class ReceiptHandler {
     constructor(
@@ -27,14 +28,25 @@ export class ReceiptHandler {
         private readonly modify: IModify
     ) {
         this.receiptService = new ReceiptService(persistence, persistenceRead);
+        this.channelService = new ChannelService(persistence, persistenceRead);
     }
 
     private readonly receiptService: ReceiptService;
+    private readonly channelService: ChannelService;
+
+    private async getCurrencySymbol(roomId: string): Promise<string> {
+        const currency = await this.channelService.getCurrencyForChannel(roomId);
+        return currency || "$";
+    }
 
     public async addReceiptData(parsedData: IReceiptData): Promise<void> {
         const uploadedDate = parsedData.uploadedDate
             ? toDateString(parsedData.uploadedDate)
             : new Date().toISOString().slice(0, 10);
+
+        const formatNumber = (value: number) =>
+            Number(parseFloat(String(value)).toFixed(2));
+
         const receiptData: IReceiptData = {
             userId: parsedData.userId,
             messageId: parsedData.messageId,
@@ -43,12 +55,13 @@ export class ReceiptHandler {
             items: parsedData.items.map(
                 (item: any): IReceiptItem => ({
                     name: item.name,
-                    price: item.price,
+                    price: formatNumber(item.price),
                     quantity: item.quantity,
                 })
             ),
-            extraFee: parsedData.extraFee,
+            extraFee: formatNumber(parsedData.extraFee),
             totalPrice: parsedData.totalPrice,
+            discounts: formatNumber(parsedData.discounts),
             uploadedDate: uploadedDate,
             receiptDate: parsedData.receiptDate || "",
         };
@@ -88,6 +101,7 @@ export class ReceiptHandler {
                 ),
                 extraFee: parsedData.extra_fees,
                 totalPrice: parsedData.total_price,
+                discounts: parsedData.discounts,
                 uploadedDate: toDateString(new Date()),
                 receiptDate: "",
             };
@@ -102,15 +116,16 @@ export class ReceiptHandler {
         }
     }
 
-    private buildReceiptBlocks(
+    private async buildReceiptBlocks(
         blockBuilder: BlockBuilder,
         receipt: IReceiptData,
+        currency: string,
         options?: {
             index?: number;
             showActions?: boolean;
             showSuccess?: boolean;
         }
-    ): void {
+    ): Promise<void> {
         const {
             index,
             showActions = true,
@@ -127,17 +142,18 @@ export class ReceiptHandler {
 
         let summary = `*Items:*\n`;
         receipt.items.forEach((item) => {
-            const itemTotal = (item.price * item.quantity).toFixed(2);
+            const itemTotal = (item.price * item.quantity);
             if (item.quantity > 1) {
                 summary += `• ${item.name} (${
                     item.quantity
-                } × $${item.price.toFixed(2)}) — $${itemTotal}\n`;
+                } × ${currency}${item.price}) — ${currency}${itemTotal}\n`;
             } else {
-                summary += `• ${item.name} — $${itemTotal}\n`;
+                summary += `• ${item.name} — ${currency}${itemTotal}\n`;
             }
         });
-        summary += `*Extra Fees:* $${receipt.extraFee.toFixed(2)}\n`;
-        summary += `*Total:* $${receipt.totalPrice.toFixed(2)}`;
+        summary += `*Extra Fees:* ${currency}${receipt.extraFee}\n`;
+        summary += `*Discounts:* ${currency}${receipt.discounts}\n`;
+        summary += `*Total:* ${currency}${receipt.totalPrice}`;
         if (showSuccess) {
             summary += `\n\n✅ Your receipt has been successfully updated.`;
         }
@@ -171,11 +187,13 @@ export class ReceiptHandler {
         }
     }
 
-    public formatReceiptsSummaryWithBlocks(
+    public async formatReceiptsSummaryWithBlocks(
         blockBuilder: BlockBuilder,
-        receipts: IReceiptData[]
-    ): void {
+        receipts: IReceiptData[],
+        roomId: string
+    ): Promise<void> {
         let receiptTotalPrice = 0;
+        const currency = await this.getCurrencySymbol(roomId);
 
         blockBuilder.addSectionBlock({
             text: blockBuilder.newMarkdownTextObject(
@@ -183,31 +201,31 @@ export class ReceiptHandler {
             ),
         });
 
-        receipts.forEach((receipt, index) => {
+        for (let index = 0; index < receipts.length; index++) {
+            const receipt = receipts[index];
             receiptTotalPrice += receipt.totalPrice;
-            this.buildReceiptBlocks(blockBuilder, receipt, {
+            await this.buildReceiptBlocks(blockBuilder, receipt, currency, {
                 index,
                 showActions: true,
             });
             if (index < receipts.length - 1) {
                 blockBuilder.addDividerBlock();
             }
-        });
+        }
 
         blockBuilder.addSectionBlock({
             text: blockBuilder.newMarkdownTextObject(
-                `*Total Amount Across All Receipts:* $${receiptTotalPrice.toFixed(
-                    2
-                )}`
+                `*Total Amount Across All Receipts:* ${currency}${receiptTotalPrice}`
             ),
         });
     }
 
-    public formatSingleReceiptBlocks(
+    public async formatSingleReceiptBlocks(
         blockBuilder: BlockBuilder,
         receipt: IReceiptData
-    ): void {
-        this.buildReceiptBlocks(blockBuilder, receipt, {
+    ): Promise<void> {
+        const currency = await this.getCurrencySymbol(receipt.roomId);
+        await this.buildReceiptBlocks(blockBuilder, receipt, currency, {
             showActions: false,
             showSuccess: true,
         });
@@ -227,7 +245,11 @@ export class ReceiptHandler {
         }
 
         const blockBuilder = modify.getCreator().getBlockBuilder();
-        this.formatReceiptsSummaryWithBlocks(blockBuilder, receipts);
+        await this.formatReceiptsSummaryWithBlocks(
+            blockBuilder,
+            receipts,
+            room.id
+        );
 
         const builder = modify
             .getCreator()
@@ -477,7 +499,7 @@ export class ReceiptHandler {
             updatedData.totalPrice = this.calculateReceiptTotal(updatedData);
             await this.receiptService.updateReceipt(updatedData);
             const blockBuilder = this.modify.getCreator().getBlockBuilder();
-            this.formatSingleReceiptBlocks(blockBuilder, updatedData);
+            await this.formatSingleReceiptBlocks(blockBuilder, updatedData);
             const message = this.modify
                 .getCreator()
                 .startMessage()
@@ -515,11 +537,21 @@ export class ReceiptHandler {
             (sum, item) => sum + item.price * item.quantity,
             0
         );
-        const finalTotal = itemsTotal + receipt.extraFee;
-        return Number(finalTotal.toFixed(2));
+        const finalTotal = itemsTotal + receipt.extraFee - receipt.discounts;
+        return Number(finalTotal);
     }
 
     public calculateTotalExtraFee(receipts: IReceiptData[]): number {
-        return receipts.reduce((sum, receipt) => sum + (receipt.extraFee || 0), 0);
+        return receipts.reduce(
+            (sum, receipt) => sum + (receipt.extraFee || 0),
+            0
+        );
+    }
+
+    public calculateTotalDiscounts(receipts: IReceiptData[]): number {
+        return receipts.reduce(
+            (sum, receipt) => sum + (receipt.discounts || 0),
+            0
+        );
     }
 }

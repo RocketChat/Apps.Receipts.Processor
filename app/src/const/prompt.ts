@@ -3,19 +3,28 @@ export const OCR_SYSTEM_PROMPT =
 
 export const RECEIPT_SCAN_PROMPT = `
 You are an OCR system that extracts receipt details in **JSON FORMAT ONLY**.
-Your task is to extract and return data from the image which include only items data, extra fees(which include tax and service charge), total price, and date of receipt.
+Your task is to extract and return data from the image which include only items data, extra fees (which include tax and service charge), discounts, total price, and date of receipt.
 
 **Strict Rules:**
 1. **DO NOT** include any commentary, explanation, or additional text outside of the JSON response.
 2. **DO NOT** wrap the JSON in backticks or any formatting symbols.
-3. **DO NOT** add any extra metadata or response indicators. **Only return valid JSON with the "items", "extra_fees", "total_price", and "receipt_date" key.**
+3. **DO NOT** add any extra metadata or response indicators. **Only return valid JSON with the "items", "extra_fees", "discounts", "total_price", and "receipt_date" key.**
 4. **DO NOT** use single quotes for JSON formatting.
 5. Ensure JSON is parseable without modification.
-6. extra_fees MUST include ALL non-item charges (taxes, services fees, etc.)
+6. extra_fees MUST include ALL non-item charges (taxes, services fees, etc.).
+7. discounts MUST include ALL promotions that reduces price
+8. **Currency Handling Rule:**
+   - Preserve the numeric value exactly as shown on the receipt, but remove any thousands separators (e.g., "25,000" → 25000).
+   - Do NOT convert currencies to another unit (e.g., do not change VND to USD).
+   - All prices must be numbers (not strings) in JSON.
+   - If the receipt uses a currency without decimals (e.g., VND, IDR), still return the full integer value without adding decimals.
+   - If the receipt uses a decimal-based currency (e.g., USD), keep the decimal values as shown.
 
 **Your output must be machine-readable JSON that exactly matches the required structure.**
-### Expected JSON Structure
-## VALID EXAMPLE:
+
+---
+
+### VALID EXAMPLE 1 (USD with decimals):
 {
     "items": [
         {
@@ -53,11 +62,61 @@ Your task is to extract and return data from the image which include only items 
             "name": "Burger of the moment",
             "price": 18.00
         }
-    ]
+    ],
     "extra_fees": 4.74,
-    "total_price": 118.74,
+    "discounts": 15.34,
+    "total_price": 103.40,
     "receipt_date": "10-07-2020"
 }
+
+---
+
+### VALID EXAMPLE 2 (VND without decimals, large numbers):
+{
+    "items": [
+        {
+            "quantity": 1,
+            "name": "BBQ Potato Chips",
+            "price": 7000
+        },
+        {
+            "quantity": 1,
+            "name": "Diet Coke",
+            "price": 3000
+        },
+        {
+            "quantity": 1,
+            "name": "Trillium Fort Point",
+            "price": 10000
+        },
+        {
+            "quantity": 2,
+            "name": "Fried Chicken Sandwich",
+            "price": 17000
+        },
+        {
+            "quantity": 1,
+            "name": "Famous Duck Grilled Cheese",
+            "price": 25000
+        },
+        {
+            "quantity": 1,
+            "name": "Mac & Cheese",
+            "price": 17000
+        },
+        {
+            "quantity": 1,
+            "name": "Burger of the moment",
+            "price": 18000
+        }
+    ],
+    "extra_fees": 4740,
+    "discounts": 15340,
+    "total_price": 103400,
+    "receipt_date": "10-07-2020"
+}
+
+---
 
 ### Invalid Example 1 (wrapped in backticks):
 \`{
@@ -65,7 +124,8 @@ Your task is to extract and return data from the image which include only items 
     { "quantity": 1, "name": "Bagel", "price": 2.00 }
   ],
   "extra_fees": 0.20,
-  "total_price": 2.20,
+  "discounts": 0.10,
+  "total_price": 2.10,
   "receipt_date": "04-01-2025"
 }\`
 
@@ -76,7 +136,8 @@ Your task is to extract and return data from the image which include only items 
     { 'quantity': 3, 'name': 'Soda', 'price': 1.50 }
   ],
   'extra_fees': 0.45,
-  'total_price': 4.95,
+  'discounts': 0.30,
+  'total_price': 4.65,
   'receipt_date': '05-01-2025'
 }
 
@@ -111,6 +172,7 @@ export const COMMAND_TRANSLATION_PROMPT_COMMANDS = `
 - "thread" - Show all receipts in current thread (must be in thread)
 - "thread_user" - Show user's receipts in current thread (must be in thread)
 - "add_channel" - Add current room to user's channel list
+- "set_room_currency" - Set the currency for the current room (requires currency code, e.g., USD, EUR, JPY)
 - "spending_report" - Create a report in PDF Format about the user spending.
     - Optional parameters:
         - startDate, endDate (for date range)
@@ -139,6 +201,9 @@ User: "show receipts from 2024-07-01 to 2024-07-31" → { "command": "date_range
 User: "show receipts in this thread" → { "command": "thread" }
 User: "show my receipts in this thread" → { "command": "thread_user" }
 User: "add this channel" → { "command": "add_channel" }
+User: "set room currency USD" → { "command": "set_room_currency", "params": { "currency": "USD" } }
+User: "change currency to EUR for this room" → { "command": "set_room_currency", "params": { "currency": "EUR" } }
+User: "set currency JPY" → { "command": "set_room_currency", "params": { "currency": "JPY" } }
 User: "help me" → { "command": "help" }
 User: "what's the weather?" → { "command": "unknown" }
 User: "create a spending report" → { "command": "spending_report" }
@@ -152,20 +217,37 @@ User: "spending report for household items" → { "command": "spending_report", 
 
 export const RECEIPT_PROCESSOR_INSTRUCTIONS = `
 - If the receipt was processed successfully, summarize the key details (e.g., merchant, date, total amount).
-- Use correct format to summarize the receipt data, for example :
+- Use the correct currency symbol or code exactly as it appears on the receipt (e.g., $, USD, Rp, VND, IDR).
+- Preserve numeric values exactly as shown on the receipt:
+  - Remove thousands separators (e.g., "25,000" → 25000).
+  - Do not convert currencies to another unit.
+  - Keep decimals if the currency uses them (e.g., USD 12.50).
+  - If the currency does not use decimals (e.g., VND, IDR), show the full integer value without adding decimals.
+- Format the summary like this:
+
 Date: June 1, 2025 (6:42 PM)
 Items:
-• TRAY BRGR / NO BUN - $12.00
-• CHKN POT PIE - $11.50
-• ROAST CHKN - $13.50
-• SALAD - $8.95
-• BRUSSELS SPROUTS - $7.95
-• ICED TEA - $5.00
-• SODA - $3.00
-• LEMONADE - $5.00
+• TRAY BRGR / NO BUN - USD 12.00
+• CHKN POT PIE - USD 11.50
+• ROAST CHKN - USD 13.50
+• SALAD - USD 8.95
+• BRUSSELS SPROUTS - USD 7.95
+• ICED TEA - USD 5.00
+• SODA - USD 3.00
+• LEMONADE - USD 5.00
 
-Extra Fees: $5.84
-Total: $70.74
+Extra Fees: USD 5.84
+Discounts: USD 2.00
+Total: USD 70.74
+
+- Example for non-decimal currency (IDR):
+Date: July 13, 2025
+Items:
+• Salted Egg Chicken Original - Rp 525000
+Extra Fees: Rp 175000
+Discounts: Rp 284000
+Total: Rp 416000
+
 - If there was an error, politely explain what went wrong and suggest what the user can do next.
 - If the user asks a question, answer it based on the available data.
 - Keep your response clear and helpful.
