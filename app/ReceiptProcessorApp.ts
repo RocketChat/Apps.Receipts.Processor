@@ -29,12 +29,16 @@ import { ReceiptHandler } from "./src/handler/receiptHandler";
 import { IReceiptData, IReceiptItem } from "./src/types/receipt";
 import {
     RECEIPT_PROCESSOR_INSTRUCTIONS,
-    RECEIPT_SCAN_PROMPT,
-    COMMAND_TRANSLATION_PROMPT_COMMANDS,
-    COMMAND_TRANSLATION_PROMPT_EXAMPLES,
     RECEIPT_CONFIRMATION_INSTRUCTIONS,
     RECEIPT_PROCESSING_INSTRUCTIONS,
-} from "./src/const/prompt";
+} from "./src/prompts/ocr/receiptDialoguePrompt";
+import {
+    RECEIPT_SCAN_PROMPT,
+} from "./src/prompts/ocr/receiptScanPrompt"
+import {
+    COMMAND_TRANSLATION_PROMPT_COMMANDS,
+    COMMAND_TRANSLATION_PROMPT_EXAMPLES
+} from "./src/prompts/commands/commandTranslationPrompt"
 import {
     IUIKitInteractionHandler,
     UIKitBlockInteractionContext,

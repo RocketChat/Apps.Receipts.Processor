@@ -1,7 +1,7 @@
 import { fetchDataHf, llmResponse } from "./ApiCalls";
 import { Row } from "./interfaces";
 import { describe, expect, beforeAll, test, afterAll } from "@jest/globals";
-import { RECEIPT_SCAN_PROMPT } from "../../app/src/const/prompt";
+import { RECEIPT_SCAN_PROMPT } from "../../app/src/prompts/ocr/receiptScanPrompt";
 import { LENGTH } from "./constants";
 import nock from "nock";
 

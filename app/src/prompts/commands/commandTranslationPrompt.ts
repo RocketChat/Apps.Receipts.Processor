@@ -1,4 +1,3 @@
-
 export const COMMAND_TRANSLATION_PROMPT_COMMANDS = `
 **Available Commands:**
 - "list" - Show user's receipts in current room

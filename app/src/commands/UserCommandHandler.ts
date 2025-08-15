@@ -16,7 +16,7 @@ import { RESPONSE_PROMPT } from "../../src/prompt_library/const/prompt";
 import {
     CREATE_REPORT_INSTRUCTIONS,
     CREATE_CATEGORY_REPORT_INSTRUCTIONS,
-} from "../const/prompt";
+} from "../prompts/reports/createReportInstructions";
 import { ReceiptService } from "../service/receiptService";
 import { ISpendingReport, IReceiptData } from "../types/receipt";
 import { sendDownloadablePDF } from "../utils/pdfGenerator";

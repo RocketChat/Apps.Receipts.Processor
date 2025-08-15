@@ -4,7 +4,8 @@ import {
     IMessageAttachment,
 } from "@rocket.chat/apps-engine/definition/messages";
 import { getAPIConfig } from "../config/settings";
-import { OCR_SYSTEM_PROMPT, RECEIPT_VALIDATION_PROMPT } from "../const/prompt";
+import { OCR_SYSTEM_PROMPT } from "../prompts/ocr/ocrSystemPrompt";
+import { RECEIPT_VALIDATION_PROMPT } from "../prompts/ocr/receiptValidationPrompt"
 import { LLMClient } from "../prompt_library/client";
 import { ImageRequest } from "../prompt_library/const/types";
 import { getLLMConfigFromValues } from "../prompt_library/config";
