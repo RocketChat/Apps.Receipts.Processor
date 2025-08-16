@@ -14,10 +14,7 @@ import {
     IPostMessageSent,
 } from "@rocket.chat/apps-engine/definition/messages";
 import { getAPIConfig, settings } from "./src/config/settings";
-import {
-    sendMessage,
-    sendConfirmationButtons,
-} from "./src/utils/message";
+import { sendMessage, sendConfirmationButtons } from "./src/utils/message";
 import {
     GENERAL_ERROR_RESPONSE,
     INVALID_IMAGE_RESPONSE,
@@ -32,13 +29,11 @@ import {
     RECEIPT_CONFIRMATION_INSTRUCTIONS,
     RECEIPT_PROCESSING_INSTRUCTIONS,
 } from "./src/prompts/ocr/receiptDialoguePrompt";
-import {
-    RECEIPT_SCAN_PROMPT,
-} from "./src/prompts/ocr/receiptScanPrompt"
+import { RECEIPT_SCAN_PROMPT } from "./src/prompts/ocr/receiptScanPrompt";
 import {
     COMMAND_TRANSLATION_PROMPT_COMMANDS,
-    COMMAND_TRANSLATION_PROMPT_EXAMPLES
-} from "./src/prompts/commands/commandTranslationPrompt"
+    COMMAND_TRANSLATION_PROMPT_EXAMPLES,
+} from "./src/prompts/commands/commandTranslationPrompt";
 import {
     IUIKitInteractionHandler,
     UIKitBlockInteractionContext,
@@ -284,12 +279,12 @@ export class ReceiptProcessorApp
                         extraFee: parsedResult.extraFee,
                         totalPrice: parsedResult.totalPrice,
                         discounts: parsedResult.discounts,
-                        uploadedDate: parsedResult.uploadedDate,
                         receiptDate: parsedResult.receiptDate,
                     };
 
                     const context = "The user just uploaded photo of a receipt";
-                    const response = "Ask the user if they want to save the data or not ?";
+                    const response =
+                        "Ask the user if they want to save the data or not ?";
                     const question = await botHandler.processResponse(
                         RESPONSE_PROMPT(
                             context,
@@ -473,67 +468,48 @@ export class ReceiptProcessorApp
                 receiptData.roomId,
                 receiptData.messageId
             );
-            try {
-                const updatedReceipts =
-                    await receiptHandler.getReceiptsForUpdate(
-                        receiptData.roomId,
-                        receiptData.threadId
-                    );
 
-                if (data.message && data.message.id) {
-                    if (updatedReceipts && updatedReceipts.length > 0) {
-                        const blockBuilder = modify
-                            .getCreator()
-                            .getBlockBuilder();
-                        receiptHandler.formatReceiptsSummaryWithBlocks(
-                            blockBuilder,
-                            updatedReceipts,
-                            receiptData.roomId
-                        );
+            if (data.message && appUser) {
+                await modify.getDeleter().deleteMessage(data.message, appUser);
+            }
 
-                        const updater = await modify
-                            .getUpdater()
-                            .message(data.message.id, appUser);
-                        updater.setEditor(appUser).setBlocks(blockBuilder);
-                        await modify.getUpdater().finish(updater);
-                    } else {
-                        const updater = await modify
-                            .getUpdater()
-                            .message(data.message.id, appUser);
-                        updater
-                            .setEditor(appUser)
-                            .setText("All receipts have been deleted.");
-                        await modify.getUpdater().finish(updater);
-                    }
-                }
-                const builder = modify
-                    .getCreator()
-                    .startMessage()
-                    .setSender(appUser)
-                    .setRoom(data.room!)
-                    .setText("Receipt deleted successfully.");
+            const updatedReceipts = await receiptHandler.getReceiptsForUpdate(
+                receiptData.roomId,
+                receiptData.threadId
+            );
 
-                if (receiptData.threadId) {
-                    builder.setThreadId(receiptData.threadId);
-                }
-                await modify.getCreator().finish(builder);
-            } catch (error) {
-                this.getLogger().info(
-                    "Error updating receipt list after deletion:",
-                    error
+            if (updatedReceipts && updatedReceipts.length > 0) {
+                const blockBuilder = modify.getCreator().getBlockBuilder();
+                await receiptHandler.formatReceiptsSummaryWithBlocks(
+                    blockBuilder,
+                    updatedReceipts,
+                    receiptData.roomId
                 );
+
                 const builder = modify
                     .getCreator()
                     .startMessage()
                     .setSender(appUser)
                     .setRoom(data.room!)
-                    .setText(
-                        "Receipt deleted, but failed to update the list. Please refresh the list manually."
-                    );
+                    .setBlocks(blockBuilder);
 
                 if (receiptData.threadId) {
                     builder.setThreadId(receiptData.threadId);
                 }
+
+                await modify.getCreator().finish(builder);
+            } else {
+                const builder = modify
+                    .getCreator()
+                    .startMessage()
+                    .setSender(appUser)
+                    .setRoom(data.room!)
+                    .setText("✅ All receipts have been deleted.");
+
+                if (receiptData.threadId) {
+                    builder.setThreadId(receiptData.threadId);
+                }
+
                 await modify.getCreator().finish(builder);
             }
         }
@@ -633,9 +609,7 @@ export class ReceiptProcessorApp
                 messageId: originalData.messageId,
                 threadId: originalData.threadId,
                 roomId: originalData.roomId,
-                uploadedDate: originalData.uploadedDate,
-
-                receiptDate,
+                receiptDate: originalData.receiptDate,
                 extraFee,
                 discounts,
                 totalPrice,
@@ -646,7 +620,13 @@ export class ReceiptProcessorApp
                 return context.getInteractionResponder().errorResponse();
             }
 
-            await receiptHandler.updateReceiptData(updatedData, room, user);
+            const appUser = await this.getAppUser();
+            if (!appUser) {
+                this.getLogger().error("App user not found.");
+                return context.getInteractionResponder().errorResponse();
+            }
+
+            await receiptHandler.updateReceiptData(updatedData, room, appUser);
             await receiptHandler.deleteModal(modalId);
 
             return context.getInteractionResponder().successResponse();

@@ -31,9 +31,9 @@ export class ReceiptService {
         return receipts
     }
 
-    public async getReceiptsByUserAndUploadedDate(roomId: string, uploadedDate: string) {
+    public async getReceiptsByUserAndReceiptDate(roomId: string, receiptDate: string) {
         const roomAssociationKey = Associations.withRoom(roomId)
-        const dateAssociationKey = Associations.withDate(uploadedDate)
+        const dateAssociationKey = Associations.withDate(receiptDate)
 
         const receipts = await ReceiptRepository.getReceipts(this.persistenceRead, [roomAssociationKey, dateAssociationKey])
         return receipts
@@ -71,10 +71,10 @@ export class ReceiptService {
         );
 
         const filteredReceipts = allUserRoomReceipts.filter(receipt => {
-            if (!receipt.uploadedDate) {
+            if (!receipt.receiptDate) {
                 return false;
             }
-            return receipt.uploadedDate >= startDate && receipt.uploadedDate <= endDate;
+            return receipt.receiptDate >= startDate && receipt.receiptDate <= endDate;
         });
 
         return filteredReceipts;

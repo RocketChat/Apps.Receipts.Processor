@@ -36,14 +36,10 @@ export class ReceiptHandler {
 
     private async getCurrencySymbol(roomId: string): Promise<string> {
         const currency = await this.channelService.getCurrencyForChannel(roomId);
-        return currency || "$";
+        return currency || "USD";
     }
 
     public async addReceiptData(parsedData: IReceiptData): Promise<void> {
-        const uploadedDate = parsedData.uploadedDate
-            ? toDateString(parsedData.uploadedDate)
-            : new Date().toISOString().slice(0, 10);
-
         const formatNumber = (value: number) =>
             Number(parseFloat(String(value)).toFixed(2));
 
@@ -62,8 +58,9 @@ export class ReceiptHandler {
             extraFee: formatNumber(parsedData.extraFee),
             totalPrice: parsedData.totalPrice,
             discounts: formatNumber(parsedData.discounts),
-            uploadedDate: uploadedDate,
-            receiptDate: parsedData.receiptDate || "",
+            receiptDate: parsedData.receiptDate
+                ? toDateString(parsedData.receiptDate)
+                : toDateString(new Date()),
         };
 
         await this.receiptService.addReceipt(receiptData);
@@ -102,8 +99,7 @@ export class ReceiptHandler {
                 extraFee: parsedData.extra_fees,
                 totalPrice: parsedData.total_price,
                 discounts: parsedData.discounts,
-                uploadedDate: toDateString(new Date()),
-                receiptDate: "",
+                receiptDate: toDateString(new Date()),
             };
 
             if (parsedData.receipt_date) {
@@ -133,8 +129,8 @@ export class ReceiptHandler {
         } = options || {};
         const header =
             index !== undefined
-                ? `*${index + 1}. Receipt from ${receipt.uploadedDate}*`
-                : `📄 *Receipt from ${receipt.uploadedDate}*`;
+                ? `*${index + 1}. Receipt from ${receipt.receiptDate}*`
+                : `📄 *Receipt from ${receipt.receiptDate}*`;
 
         blockBuilder.addSectionBlock({
             text: blockBuilder.newMarkdownTextObject(header),
@@ -285,7 +281,6 @@ export class ReceiptHandler {
                 threadId
             );
         } catch (error) {
-            console.error("Error listing receipts:", error);
             await sendMessage(
                 this.modify,
                 appUser,
@@ -314,7 +309,6 @@ export class ReceiptHandler {
                 threadId
             );
         } catch (error) {
-            console.error("Error listing room receipts:", error);
             await sendMessage(
                 this.modify,
                 appUser,
@@ -333,7 +327,7 @@ export class ReceiptHandler {
     ): Promise<void> {
         try {
             const receipts =
-                await this.receiptService.getReceiptsByUserAndUploadedDate(
+                await this.receiptService.getReceiptsByUserAndReceiptDate(
                     room.id,
                     date
                 );
@@ -346,7 +340,6 @@ export class ReceiptHandler {
                 threadId
             );
         } catch (error) {
-            console.error("Error listing user date receipts:", error);
             await sendMessage(
                 this.modify,
                 appUser,
@@ -413,7 +406,6 @@ export class ReceiptHandler {
                 threadId
             );
         } catch (error) {
-            console.error("Error listing user date receipts:", error);
             await sendMessage(
                 this.modify,
                 appUser,
@@ -446,7 +438,6 @@ export class ReceiptHandler {
                 threadId
             );
         } catch (error) {
-            console.error("Error listing user date receipts:", error);
             await sendMessage(
                 this.modify,
                 appUser,
@@ -471,7 +462,6 @@ export class ReceiptHandler {
                 return await this.receiptService.getReceiptsByRoom(roomId);
             }
         } catch (error) {
-            console.error("Error getting receipts for update:", error);
             return null;
         }
     }
@@ -513,7 +503,6 @@ export class ReceiptHandler {
 
             await this.modify.getCreator().finish(message);
         } catch (error) {
-            console.error("Error updating receipt:", error);
             await sendMessage(
                 this.modify,
                 appUser,

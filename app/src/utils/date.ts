@@ -1,10 +1,31 @@
 export function toDateString(date: string | Date): string {
-    if (typeof date === 'string') {
-        return date.slice(0, 10);
-    } else if (date instanceof Date) {
-        return date.toISOString().slice(0, 10);
+    let d: Date;
+
+    if (date instanceof Date) {
+        d = date;
+    } else if (typeof date === "string") {
+        if (!isNaN(Date.parse(date))) {
+            d = new Date(date);
+        } else {
+            const match = date.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+            if (match) {
+                const day = parseInt(match[1], 10);
+                const month = parseInt(match[2], 10);
+                const year = parseInt(match[3], 10);
+                d = new Date(year, month - 1, day);
+            } else {
+                d = new Date();
+            }
+        }
+    } else {
+        d = new Date();
     }
-    throw new Error('Invalid date type');
+
+    if (isNaN(d.getTime())) {
+        d = new Date();
+    }
+
+    return d.toISOString().slice(0, 10);
 }
 
 export function formatDateDDMMYY(dateStr: string): string {
