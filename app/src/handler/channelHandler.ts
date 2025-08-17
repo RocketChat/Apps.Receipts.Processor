@@ -3,10 +3,12 @@ import {
     IHttp,
     IPersistence,
     IPersistenceRead,
+    IModify,
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
 import { ChannelService } from "../service/channelService";
 import { sendMessage } from "../utils/message";
+import { IUser } from "@rocket.chat/apps-engine/definition/users";
 
 export class ChannelHandler {
     constructor(
@@ -26,8 +28,8 @@ export class ChannelHandler {
         isBotMentioned: boolean,
         isAddChannel: boolean,
         message: IMessage,
-        modify: any,
-        appUser: any,
+        modify: IModify,
+        appUser: IUser,
         processTextCommand: (cleanedMessage: string, message: IMessage) => Promise<void>
     ): Promise<void> {
         if (!isBotMentioned) return;

@@ -6,7 +6,9 @@ import {
     IHttp,
     IModify,
     IPersistence,
+    IAppInstallationContext
 } from "@rocket.chat/apps-engine/definition/accessors";
+import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { App } from "@rocket.chat/apps-engine/definition/App";
 import { IAppInfo } from "@rocket.chat/apps-engine/definition/metadata";
 import {
@@ -18,7 +20,8 @@ import { sendMessage, sendConfirmationButtons } from "./src/utils/message";
 import {
     GENERAL_ERROR_RESPONSE,
     INVALID_IMAGE_RESPONSE,
-    INVALID_SETTINGS_RESPONSE,
+    LLM_UNAVAILABLE_RESPONSE,
+    FIRST_INSTALL_RESPONSE,
 } from "./src/const/response";
 import { ReceiptCommand } from "./src/commands/ReceiptCommand";
 import { ImageHandler } from "./src/handler/imageHandler";
@@ -50,16 +53,12 @@ import {
 } from "./src/prompt_library/const/prompt";
 import { createEditReceiptModal } from "./src/modals/editReceiptModal";
 import { CommandParseHandler } from "./src/commands/CommandParserHandler";
-import { ISpendingReport } from "./src/types/receipt";
+import { sendDirectMessage } from "./src/utils/message";
 
-export class ReceiptProcessorApp
-    extends App
-    implements IPostMessageSent, IUIKitInteractionHandler
-{
+export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKitInteractionHandler {
     private commandHandler: CommandHandler | undefined;
     private channelHandler: ChannelHandler | undefined;
     private botHandler: BotHandler | undefined;
-    private appUsername: string | undefined;
 
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
         super(info, logger, accessors);
@@ -88,6 +87,32 @@ export class ReceiptProcessorApp
         return appUser;
     }
 
+    public async onInstall(
+        context: IAppInstallationContext,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify
+    ): Promise<void> {
+        this.getLogger().info("Receipt Processor App installed!");
+        try {
+            const installer: IUser | undefined = context.user;
+            if (!installer) {
+                this.getLogger().error("Installer user not found in context.");
+                return;
+            }
+
+            await sendDirectMessage(
+                read,
+                modify,
+                installer,
+                FIRST_INSTALL_RESPONSE
+            );
+        } catch (error) {
+            this.getLogger().error("Error sending welcome message:", error);
+        }
+    }
+
     public async executePostMessageSent(
         message: IMessage,
         read: IRead,
@@ -103,11 +128,6 @@ export class ReceiptProcessorApp
         const userId = message.sender.id;
         const appUser = await this.getAppUser();
         if (!appUser) return;
-
-        if (!this.appUsername) {
-            this.appUsername = appUser.username;
-        }
-
         if (!this.commandHandler) {
             this.commandHandler = new CommandHandler(
                 read,
@@ -127,14 +147,21 @@ export class ReceiptProcessorApp
             this.botHandler = new BotHandler(http, read);
         }
 
+         const { modelType, apiKey, apiEndpoint } = await getAPIConfig(read);
+        if (modelType == "" || apiKey == "" || apiEndpoint == "") {
+            await sendMessage(
+                modify,
+                appUser,
+                message.room,
+                LLM_UNAVAILABLE_RESPONSE,
+                message.threadId
+            );
+            return;
+        }
+
         const userChannels = await this.channelHandler.getUserChannels(userId);
-        const isBotMentioned = await this.botHandler.isBotMentioned(
-            message,
-            appUser
-        );
-        const isAddChannel = CommandParseHandler.isAddChannelCommand(
-            message.text || ""
-        );
+        const isBotMentioned = await this.botHandler.isBotMentioned(message, appUser);
+        const isAddChannel = CommandParseHandler.isAddChannelCommand(message.text || "");
         if (!userChannels || !userChannels.includes(roomId)) {
             await this.channelHandler.handleUnregisteredChannel(
                 isBotMentioned,
@@ -154,22 +181,9 @@ export class ReceiptProcessorApp
             return;
         }
 
-        const hasImageAttachment =
-            message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
+        const hasImageAttachment = message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
         const messageText = message.text?.trim() || "";
-        const isTextCommand =
-            CommandParseHandler.isReceiptCommand(messageText) && isBotMentioned;
-        const { modelType, apiKey, apiEndpoint } = await getAPIConfig(read);
-        if (modelType == "" || apiKey == "" || apiEndpoint == "") {
-            await sendMessage(
-                modify,
-                appUser,
-                message.room,
-                INVALID_SETTINGS_RESPONSE,
-                message.threadId
-            );
-            return;
-        }
+        const isTextCommand = CommandParseHandler.isReceiptCommand(messageText) && isBotMentioned;
 
         if (hasImageAttachment) {
             await this.processImageMessage(
@@ -201,7 +215,7 @@ export class ReceiptProcessorApp
         http: IHttp,
         persistence: IPersistence,
         modify: IModify,
-        appUser: any
+        appUser: IUser
     ): Promise<void> {
         const imageHandler = new ImageHandler(http, read);
         const isReceipt = await imageHandler.validateImage(message);
@@ -216,7 +230,7 @@ export class ReceiptProcessorApp
                 modify,
                 appUser,
                 message.room,
-                INVALID_SETTINGS_RESPONSE,
+                LLM_UNAVAILABLE_RESPONSE,
                 threadId
             );
             return;
@@ -529,8 +543,7 @@ export class ReceiptProcessorApp
         const appUser = await this.getAppUser();
         if (!appUser) return false;
 
-        const hasImageAttachment =
-            message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
+        const hasImageAttachment = message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
 
         if (!this.botHandler) {
             this.botHandler = new BotHandler(http, read);

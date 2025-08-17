@@ -17,6 +17,7 @@ import {
     CREATE_REPORT_INSTRUCTIONS,
     CREATE_CATEGORY_REPORT_INSTRUCTIONS,
 } from "../prompts/reports/createReportInstructions";
+import { LLM_UNAVAILABLE_RESPONSE } from "../const/response"
 import { ReceiptService } from "../service/receiptService";
 import { ISpendingReport, IReceiptData } from "../types/receipt";
 import { sendDownloadablePDF } from "../utils/pdfGenerator";
@@ -289,9 +290,9 @@ export class CommandHandler {
                     );
                 case "create_channel":
                     return await this.createChannel(room, user, appUser, params, threadId);
-                case "unknown":
+
                 default:
-                    return await this.handleUnknownCommand(
+                    return await this.fallbackResponse(
                         appUser,
                         room,
                         threadId
@@ -723,23 +724,12 @@ export class CommandHandler {
         return { success: true };
     }
 
-    private async handleUnknownCommand(
+    private async fallbackResponse(
         appUser: IUser,
         room: IRoom,
         threadId?: string
     ): Promise<CommandResult> {
-        const context =
-            "The user entered a command or message that the bot does not recognize or support. The user may be trying to interact with the receipt processor bot, but the intent is unclear.";
-        const response =
-            "I'm not sure I understood that. If you need help with your receipts or want to know what I can do, just let me know by asking for help!";
-        const instructions =
-            "Respond in a friendly, concise, and encouraging way. Let the user know their message wasn't understood, and suggest they ask for help or try rephrasing. Do not use the exact words from the example; vary the wording and keep it open-ended.";
-
-        const processResponse = await this.botHandler.processResponse(
-            RESPONSE_PROMPT(context, "", response, instructions)
-        );
-
-        sendMessage(this.modify, appUser, room, processResponse, threadId);
+        sendMessage(this.modify, appUser, room, LLM_UNAVAILABLE_RESPONSE, threadId);
         return { success: false };
     }
 
