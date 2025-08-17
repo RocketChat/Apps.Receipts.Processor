@@ -12,6 +12,9 @@ export const COMMAND_TRANSLATION_PROMPT_COMMANDS = `
     - Optional parameters:
         - startDate, endDate (for date range)
         - category (for filtering by category, e.g., Food, Electronics, etc.)
+- "create_channel" - Create a new channel in Rocket.Chat
+    - Required parameters:
+        - name (the channel name, e.g., "receipt-processing")
 - "help" - Show available commands
 - "unknown" - When request doesn't match any command
 `;
@@ -48,5 +51,7 @@ User: "show my spending summary" → { "command": "spending_report" }
 User: "show my food spending" → { "command": "spending_report", "params": { "category": "Food" } }
 User: "generate electronics spending report for last month" → { "command": "spending_report", "params": { "startDate": "2024-06-01", "endDate": "2024-06-30", "category": "Electronics" } }
 User: "spending report for household items" → { "command": "spending_report", "params": { "category": "Household" } }
+User: "create channel project-alpha" → { "command": "create_channel", "params": { "name": "project-alpha" } }
+User: "make a new channel called finance-team" → { "command": "create_channel", "params": { "name": "finance-team" } }
+User: "create channel marketing" → { "command": "create_channel", "params": { "name": "marketing" } }
 `;
-

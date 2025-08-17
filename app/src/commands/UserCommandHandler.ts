@@ -20,6 +20,7 @@ import {
 import { ReceiptService } from "../service/receiptService";
 import { ISpendingReport, IReceiptData } from "../types/receipt";
 import { sendDownloadablePDF } from "../utils/pdfGenerator";
+import { RoomType } from "@rocket.chat/apps-engine/definition/rooms"
 
 function parseDateString(dateStr: string): string | undefined {
     if (!dateStr) return undefined;
@@ -155,6 +156,11 @@ export class CommandHandler {
             params.currency = currencyMatch[1].toUpperCase();
         }
 
+        const createChannelMatch = message.match(/create\s+channel\s+([A-Za-z0-9-_]+)/i);
+        if (createChannelMatch) {
+            params.name = createChannelMatch[1];
+        }
+
         return Object.keys(params).length > 0 ? params : undefined;
     }
 
@@ -274,7 +280,15 @@ export class CommandHandler {
                         endDate
                     );
                 case "set_room_currency":
-                    return await this.setRoomCurrency(room, user, appUser, params, threadId);
+                    return await this.setRoomCurrency(
+                        room,
+                        user,
+                        appUser,
+                        params,
+                        threadId
+                    );
+                case "create_channel":
+                    return await this.createChannel(room, user, appUser, params, threadId);
                 case "unknown":
                 default:
                     return await this.handleUnknownCommand(
@@ -572,8 +586,11 @@ export class CommandHandler {
         );
 
         let receiptDatas: IReceiptData[];
-        if(threadId) {
-            receiptDatas = await this.receiptService.getReceiptsByThread(room.id, threadId)
+        if (threadId) {
+            receiptDatas = await this.receiptService.getReceiptsByThread(
+                room.id,
+                threadId
+            );
         } else {
             if (startDate && endDate) {
                 receiptDatas =
@@ -584,10 +601,11 @@ export class CommandHandler {
                         endDate
                     );
             } else {
-                receiptDatas = await this.receiptService.getReceiptsByUserAndRoom(
-                    user.id,
-                    room.id
-                );
+                receiptDatas =
+                    await this.receiptService.getReceiptsByUserAndRoom(
+                        user.id,
+                        room.id
+                    );
             }
         }
 
@@ -631,10 +649,13 @@ export class CommandHandler {
             };
         }
 
-        const currency = (await this.channelService.getCurrencyForChannel(room.id)) || "$";
+        const currency =
+            (await this.channelService.getCurrencyForChannel(room.id)) || "$";
         const report: ISpendingReport = JSON.parse(cleanJSON);
-        report.extraFee = this.receiptHandler.calculateTotalExtraFee(receiptDatas)
-        report.discounts = this.receiptHandler.calculateTotalDiscounts(receiptDatas)
+        report.extraFee =
+            this.receiptHandler.calculateTotalExtraFee(receiptDatas);
+        report.discounts =
+            this.receiptHandler.calculateTotalDiscounts(receiptDatas);
         await sendDownloadablePDF(
             this.modify,
             appUser,
@@ -654,7 +675,7 @@ export class CommandHandler {
         room: IRoom,
         threadId?: string
     ): Promise<CommandResult> {
-      const helpMessage = `
+        const helpMessage = `
         👋 **Hi there! I'm here to help you manage your receipts.**
 
             Here are some things you can ask me to do:
@@ -732,7 +753,11 @@ export class CommandHandler {
         try {
             const currency = params?.currency || params?.searchTerm;
 
-            if (!currency || typeof currency !== "string" || currency.trim() === "") {
+            if (
+                !currency ||
+                typeof currency !== "string" ||
+                currency.trim() === ""
+            ) {
                 sendMessage(
                     this.modify,
                     appUser,
@@ -743,13 +768,18 @@ export class CommandHandler {
                 return { success: false, message: "Invalid currency" };
             }
 
-            await this.channelService.setCurrencyForChannel(room.id, currency.trim().toUpperCase());
+            await this.channelService.setCurrencyForChannel(
+                room.id,
+                currency.trim().toUpperCase()
+            );
 
             sendMessage(
                 this.modify,
                 appUser,
                 room,
-                `✅ Currency for this room has been set to **${currency.trim().toUpperCase()}**.`,
+                `✅ Currency for this room has been set to **${currency
+                    .trim()
+                    .toUpperCase()}**.`,
                 threadId
             );
 
@@ -761,6 +791,62 @@ export class CommandHandler {
                 appUser,
                 room,
                 "❌ Failed to set currency for this room.",
+                threadId
+            );
+            return { success: false };
+        }
+    }
+
+    private async createChannel(
+        room: IRoom,
+        user: IUser,
+        appUser: IUser,
+        params?: CommandParams,
+        threadId?: string
+    ): Promise<CommandResult> {
+        try {
+            const channelName = params?.searchTerm || params?.name;
+            if (!channelName || typeof channelName !== "string") {
+                sendMessage(
+                    this.modify,
+                    appUser,
+                    room,
+                    "❌ Please provide a valid channel name. Example: `create channel daily-coffee-spending`",
+                    threadId
+                );
+                return { success: false, message: "Invalid channel name" };
+            }
+            const creator = this.modify.getCreator();
+            const newRoomBuilder = creator
+                .startRoom()
+                .setCreator(user)
+                .setType(RoomType.CHANNEL)
+                .setDisplayName(channelName)
+                .setSlugifiedName(
+                    channelName.toLowerCase().replace(/\s+/g, "-")
+                );
+
+            const newRoomId = await creator.finish(newRoomBuilder);
+            sendMessage(
+                this.modify,
+                appUser,
+                room,
+                `✅ Channel **#${channelName}** has been created and registered successfully!`,
+                threadId
+            );
+            await this.channelService.addChannel(newRoomId, user.id)
+
+            return {
+                success: true,
+                message: `Channel created with ID: ${newRoomId}`,
+            };
+        } catch (error) {
+            this.app.getLogger().error("Error creating channel:", error);
+            sendMessage(
+                this.modify,
+                appUser,
+                room,
+                "❌ Failed to create the channel. Please try again by using different channel name.",
                 threadId
             );
             return { success: false };
