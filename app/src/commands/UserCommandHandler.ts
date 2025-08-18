@@ -702,6 +702,9 @@ export class CommandHandler {
             - **Add this channel:**
             Say "@bot add this channel to my list" or "@bot subscribe to this room" to start tracking receipts here.
 
+            - **Create new channel**
+            Say "@bot create channel my-spending" to create a new channel and register it directly
+
             - **Set currency for this channel:**
             Change the currency symbol used in summaries by saying:
             "@bot set currency to $" or "@bot set currency to EUR" or "@bot set currency to ฿".

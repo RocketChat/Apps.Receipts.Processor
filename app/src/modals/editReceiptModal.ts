@@ -48,7 +48,7 @@ export async function createEditReceiptModal(
         });
         blockBuilder.addInputBlock({
             blockId: `item-price-${index}`,
-            label: blockBuilder.newPlainTextObject("Total Price for Item(s)"),
+            label: blockBuilder.newPlainTextObject("Price for Each Item"),
             element: blockBuilder.newPlainTextInputElement({
                 actionId: `itemPrice-${index}`,
                 initialValue: String(item.price),
