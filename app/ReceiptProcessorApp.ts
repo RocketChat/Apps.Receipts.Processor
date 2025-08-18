@@ -6,7 +6,7 @@ import {
     IHttp,
     IModify,
     IPersistence,
-    IAppInstallationContext
+    IAppInstallationContext,
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { App } from "@rocket.chat/apps-engine/definition/App";
@@ -55,7 +55,10 @@ import { createEditReceiptModal } from "./src/modals/editReceiptModal";
 import { CommandParseHandler } from "./src/commands/CommandParserHandler";
 import { sendDirectMessage } from "./src/utils/message";
 
-export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKitInteractionHandler {
+export class ReceiptProcessorApp
+    extends App
+    implements IPostMessageSent, IUIKitInteractionHandler
+{
     private commandHandler: CommandHandler | undefined;
     private channelHandler: ChannelHandler | undefined;
     private botHandler: BotHandler | undefined;
@@ -147,7 +150,7 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
             this.botHandler = new BotHandler(http, read);
         }
 
-         const { modelType, apiKey, apiEndpoint } = await getAPIConfig(read);
+        const { modelType, apiKey, apiEndpoint } = await getAPIConfig(read);
         if (modelType == "" || apiKey == "" || apiEndpoint == "") {
             await sendMessage(
                 modify,
@@ -160,30 +163,68 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         }
 
         const userChannels = await this.channelHandler.getUserChannels(userId);
-        const isBotMentioned = await this.botHandler.isBotMentioned(message, appUser);
-        const isAddChannel = CommandParseHandler.isAddChannelCommand(message.text || "");
+        const isBotMentioned = await this.botHandler.isBotMentioned(
+            message,
+            appUser
+        );
+
         if (!userChannels || !userChannels.includes(roomId)) {
             await this.channelHandler.handleUnregisteredChannel(
                 isBotMentioned,
-                isAddChannel,
                 message,
                 modify,
                 appUser,
-                (messageText: string) =>
-                    this.processTextCommand(
-                        messageText,
-                        message,
-                        read,
-                        http,
-                        modify
-                    )
+                async (messageText: string, msg: IMessage) => {
+                    const commandJson = await this.botHandler!.processResponse(
+                        COMMAND_TRANSLATION_PROMPT(
+                            COMMAND_TRANSLATION_PROMPT_COMMANDS,
+                            COMMAND_TRANSLATION_PROMPT_EXAMPLES(
+                                new Date().toISOString().slice(0, 10)
+                            ),
+                            messageText
+                        )
+                    );
+
+                    this.getLogger().info("Command JSON:", commandJson);
+
+                    try {
+                        const parsedCommand = JSON.parse(commandJson);
+                        if (parsedCommand.command === "add_channel" || parsedCommand.command == "create_channel") {
+                            if (this.commandHandler) {
+                                await this.commandHandler.executeCommand(
+                                    parsedCommand.command,
+                                    msg.room,
+                                    msg.sender,
+                                    parsedCommand.params,
+                                    msg.threadId
+                                );
+                            }
+                        } else {
+                            await sendMessage(
+                                modify,
+                                appUser,
+                                msg.room,
+                                "This channel is not registered. Please use `add channel` command to register it.",
+                                msg.threadId
+                            );
+                        }
+                    } catch (error) {
+                        await sendMessage(
+                            modify,
+                            appUser,
+                            msg.room,
+                            "This channel is not registered. Please use `add channel` command to register it.",
+                            msg.threadId
+                        );
+                    }
+                }
             );
             return;
         }
 
-        const hasImageAttachment = message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
+        const hasImageAttachment =
+            message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
         const messageText = message.text?.trim() || "";
-        const isTextCommand = CommandParseHandler.isReceiptCommand(messageText) && isBotMentioned;
 
         if (hasImageAttachment) {
             await this.processImageMessage(
@@ -194,11 +235,9 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
                 modify,
                 appUser
             );
-        } else if (isTextCommand && messageText) {
-            this.getLogger().info("IsTextCommand YES");
+        } else if (isBotMentioned && messageText) {
             const cleanedMessage =
                 this.botHandler.removeBotMention(messageText);
-            this.getLogger().info(`Cleaned message: "${cleanedMessage}"`);
             await this.processTextCommand(
                 cleanedMessage,
                 message,
@@ -543,7 +582,8 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         const appUser = await this.getAppUser();
         if (!appUser) return false;
 
-        const hasImageAttachment = message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
+        const hasImageAttachment =
+            message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
 
         if (!this.botHandler) {
             this.botHandler = new BotHandler(http, read);
@@ -553,14 +593,11 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
             message,
             appUser
         );
-        const hasReceiptCommand =
-            CommandParseHandler.isReceiptCommand(message.text || "") &&
-            isBotMentioned;
 
         this.getLogger().info(
-            `Has image: ${hasImageAttachment}, Bot mentioned: ${isBotMentioned}, Has command: ${hasReceiptCommand}`
+            `Has image: ${hasImageAttachment}, Bot mentioned: ${isBotMentioned}`
         );
-        return hasImageAttachment || hasReceiptCommand;
+        return hasImageAttachment || isBotMentioned;
     }
 
     public async executeViewSubmitHandler(

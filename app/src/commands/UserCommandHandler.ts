@@ -17,7 +17,7 @@ import {
     CREATE_REPORT_INSTRUCTIONS,
     CREATE_CATEGORY_REPORT_INSTRUCTIONS,
 } from "../prompts/reports/createReportInstructions";
-import { LLM_UNAVAILABLE_RESPONSE } from "../const/response"
+import { UNABLE_TO_PROCESS_COMMAND_RESPONSE } from "../const/response"
 import { ReceiptService } from "../service/receiptService";
 import { ISpendingReport, IReceiptData } from "../types/receipt";
 import { sendDownloadablePDF } from "../utils/pdfGenerator";
@@ -729,7 +729,7 @@ export class CommandHandler {
         room: IRoom,
         threadId?: string
     ): Promise<CommandResult> {
-        sendMessage(this.modify, appUser, room, LLM_UNAVAILABLE_RESPONSE, threadId);
+        sendMessage(this.modify, appUser, room, UNABLE_TO_PROCESS_COMMAND_RESPONSE, threadId);
         return { success: false };
     }
 

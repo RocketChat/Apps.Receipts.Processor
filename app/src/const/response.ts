@@ -28,3 +28,6 @@ This might be due to a network issue, invalid API settings, or the service being
 
 👉 Please check your LLM configuration in **App Settings** (API Endpoint, API Key, Model Type) and try again.
 If the problem persists, wait a few minutes and try again later.`;
+
+export const UNABLE_TO_PROCESS_COMMAND_RESPONSE =
+`I wasn’t able to process your request. Please use "help" to view available commands.`

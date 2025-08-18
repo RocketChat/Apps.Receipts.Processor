@@ -16,7 +16,7 @@ export const COMMAND_TRANSLATION_PROMPT_COMMANDS = `
     - Required parameters:
         - name (the channel name, e.g., "receipt-processing")
 - "help" - Show available commands
-- "unknown" - When request doesn't match any command
+- "unknown" - When request doesn't match any available command
 `;
 
 export const COMMAND_TRANSLATION_PROMPT_EXAMPLES = (current_date: string) => `
@@ -54,4 +54,6 @@ User: "spending report for household items" → { "command": "spending_report", 
 User: "create channel project-alpha" → { "command": "create_channel", "params": { "name": "project-alpha" } }
 User: "make a new channel called finance-team" → { "command": "create_channel", "params": { "name": "finance-team" } }
 User: "create channel marketing" → { "command": "create_channel", "params": { "name": "marketing" } }
+User: "tell me a joke" → { "command": "unknown" }
+User: "what time is it in Tokyo?" → { "command": "unknown" }
 `;
