@@ -157,8 +157,9 @@ function createSummaryCards(
             sum +
             cat.items.reduce((catSum, item) => catSum + item.price * item.quantity, 0), 0
     ) + extraFee - discounts;
+    const formattedTotalSpent = totalSpent.toLocaleString("en-US", {minimumFractionDigits: 0, maximumFractionDigits: 2});
 
-    createSummaryCard(doc, 20, startY, cardWidth, cardHeight, 'Total Spent', `${currency}${totalSpent}`, colors.danger, colors);
+    createSummaryCard(doc, 20, startY, cardWidth, cardHeight, 'Total Spent', `${currency}${formattedTotalSpent}`, colors.danger, colors);
     createSummaryCard(doc, 30 + cardWidth, startY, cardWidth, cardHeight, 'Categories', totalCategories.toString(), colors.primary, colors);
     createSummaryCard(doc, 40 + cardWidth * 2, startY, cardWidth, cardHeight, 'Total Items', totalItems.toString(), colors.accent, colors);
 
@@ -230,7 +231,11 @@ function createCategoriesSection(
         doc.text(cat.category, 25, currentY + 2);
 
         const categoryTotal = cat.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        doc.text(`${currency}${categoryTotal}`, doc.internal.pageSize.width - 25, currentY + 2, { align: 'right' });
+        const formattedCategoryTotal = categoryTotal.toLocaleString("en-US", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+        });
+        doc.text(`${currency}${formattedCategoryTotal}`, doc.internal.pageSize.width - 25, currentY + 2, { align: 'right' });
 
         currentY += 15;
         const headers = [['Item Name', 'Quantity', 'Unit Price', 'Total']];
