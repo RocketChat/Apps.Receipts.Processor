@@ -31,3 +31,7 @@ If the problem persists, wait a few minutes and try again later.`;
 
 export const UNABLE_TO_PROCESS_COMMAND_RESPONSE =
 `I wasn’t able to process your request. Please use "help" to view available commands.`
+
+export const UNREGISTERED_CHANNEL_RESPONSE =
+"This channel is not registered. Please use `add channel` command to register it."
+

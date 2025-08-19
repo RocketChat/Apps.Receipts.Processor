@@ -22,6 +22,7 @@ import {
     INVALID_IMAGE_RESPONSE,
     LLM_UNAVAILABLE_RESPONSE,
     FIRST_INSTALL_RESPONSE,
+    UNREGISTERED_CHANNEL_RESPONSE
 } from "./src/const/response";
 import { ReceiptCommand } from "./src/commands/ReceiptCommand";
 import { ImageHandler } from "./src/handler/imageHandler";
@@ -190,7 +191,6 @@ export class ReceiptProcessorApp
                     );
 
                     this.getLogger().info("Command JSON:", commandJson);
-
                     try {
                         const parsedCommand = JSON.parse(commandJson);
                         if (
@@ -211,7 +211,7 @@ export class ReceiptProcessorApp
                                 modify,
                                 appUser,
                                 msg.room,
-                                "This channel is not registered. Please use `add channel` command to register it.",
+                                UNREGISTERED_CHANNEL_RESPONSE,
                                 msg.threadId
                             );
                         }
@@ -220,7 +220,7 @@ export class ReceiptProcessorApp
                             modify,
                             appUser,
                             msg.room,
-                            "This channel is not registered. Please use `add channel` command to register it.",
+                            UNREGISTERED_CHANNEL_RESPONSE,
                             msg.threadId
                         );
                     }
@@ -229,11 +229,17 @@ export class ReceiptProcessorApp
             return;
         }
 
-        const hasImageAttachment =
-            message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
+        const hasImageAttachment = message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
         const messageText = message.text?.trim() || "";
 
         if (hasImageAttachment) {
+            await sendMessage(
+                modify,
+                appUser,
+                message.room,
+                "Processing your image, please wait...",
+                message.threadId
+            );
             await this.processImageMessage(
                 message,
                 read,
@@ -607,7 +613,9 @@ export class ReceiptProcessorApp
                     modalId
                 );
 
-                return context.getInteractionResponder().updateModalViewResponse(updatedModal);
+                return context
+                    .getInteractionResponder()
+                    .updateModalViewResponse(updatedModal);
             }
         }
 
@@ -619,28 +627,22 @@ export class ReceiptProcessorApp
         read: IRead,
         http: IHttp
     ): Promise<boolean> {
-        this.getLogger().info("Message Attachments:", message.attachments);
-        this.getLogger().info("Message ID:", message.id);
-        this.getLogger().info("Thread ID:", message.threadId);
-        this.getLogger().info("Message text:", message.text);
         const appUser = await this.getAppUser();
         if (!appUser) return false;
-
-        const hasImageAttachment =
-            message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
-
+        if (message.sender.id === appUser.id) {
+            return false;
+        }
         if (!this.botHandler) {
             this.botHandler = new BotHandler(http, read);
         }
 
+        const hasImageAttachment =
+            message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
         const isBotMentioned = await this.botHandler.isBotMentioned(
             message,
             appUser
         );
 
-        this.getLogger().info(
-            `Has image: ${hasImageAttachment}, Bot mentioned: ${isBotMentioned}`
-        );
         return hasImageAttachment || isBotMentioned;
     }
 
