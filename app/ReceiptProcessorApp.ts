@@ -59,6 +59,9 @@ import {
     RocketChatAssociationRecord,
     RocketChatAssociationModel,
 } from "@rocket.chat/apps-engine/definition/metadata";
+import {
+    toDateString
+} from "./src/utils/date"
 
 export class ReceiptProcessorApp
     extends App
@@ -509,9 +512,7 @@ export class ReceiptProcessorApp
                 persistence
             );
 
-            return context
-                .getInteractionResponder()
-                .openModalViewResponse(modal);
+            return context.getInteractionResponder().openModalViewResponse(modal);
         } else if (data.actionId === "cancel-save-receipt" && appUser) {
             const builder = modify
                 .getCreator()
@@ -707,7 +708,7 @@ export class ReceiptProcessorApp
                 messageId: originalData.messageId,
                 threadId: originalData.threadId,
                 roomId: originalData.roomId,
-                receiptDate: receiptDate || originalData.receiptDate,
+                receiptDate: toDateString(receiptDate) || toDateString(originalData.receiptDate),
                 extraFee,
                 discounts,
                 totalPrice,
