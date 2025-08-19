@@ -1,4 +1,5 @@
 export interface IReceiptItem {
+    id: string;
     name: string;
     price: number;
     quantity: number;

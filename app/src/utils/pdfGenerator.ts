@@ -141,7 +141,7 @@ function createSummaryCards(
     data: ISpendingReport,
     pageWidth: number,
     colors: ColorScheme,
-    currency: string, // ✅ Added
+    currency: string,
     startY = 55
 ): number {
     const cardWidth = (pageWidth - 80) / 3;
@@ -156,7 +156,7 @@ function createSummaryCards(
         (sum, cat) =>
             sum +
             cat.items.reduce((catSum, item) => catSum + item.price * item.quantity, 0), 0
-    ) + extraFee;
+    ) + extraFee - discounts;
 
     createSummaryCard(doc, 20, startY, cardWidth, cardHeight, 'Total Spent', `${currency}${totalSpent}`, colors.danger, colors);
     createSummaryCard(doc, 30 + cardWidth, startY, cardWidth, cardHeight, 'Categories', totalCategories.toString(), colors.primary, colors);
@@ -206,7 +206,7 @@ function createCategoriesSection(
     data: ISpendingReport,
     startY: number,
     colors: ColorScheme,
-    currency: string // ✅ Added
+    currency: string
 ): number {
     let currentY = startY;
     doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);

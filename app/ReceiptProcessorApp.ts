@@ -54,6 +54,10 @@ import {
 import { createEditReceiptModal } from "./src/modals/editReceiptModal";
 import { CommandParseHandler } from "./src/commands/CommandParserHandler";
 import { sendDirectMessage } from "./src/utils/message";
+import {
+    RocketChatAssociationRecord,
+    RocketChatAssociationModel,
+} from "@rocket.chat/apps-engine/definition/metadata";
 
 export class ReceiptProcessorApp
     extends App
@@ -189,7 +193,10 @@ export class ReceiptProcessorApp
 
                     try {
                         const parsedCommand = JSON.parse(commandJson);
-                        if (parsedCommand.command === "add_channel" || parsedCommand.command == "create_channel") {
+                        if (
+                            parsedCommand.command === "add_channel" ||
+                            parsedCommand.command == "create_channel"
+                        ) {
                             if (this.commandHandler) {
                                 await this.commandHandler.executeCommand(
                                     parsedCommand.command,
@@ -303,6 +310,7 @@ export class ReceiptProcessorApp
                 message,
                 RECEIPT_SCAN_PROMPT
             );
+
             const result = await receiptHandler.parseReceiptData(
                 response,
                 userId,
@@ -565,6 +573,42 @@ export class ReceiptProcessorApp
 
                 await modify.getCreator().finish(builder);
             }
+        } else if (data.actionId.startsWith("removeItem-")) {
+            if (!data.value) {
+                return context.getInteractionResponder().errorResponse();
+            }
+
+            const { modalId, itemId } = JSON.parse(data.value) as {
+                modalId: string;
+                itemId: string;
+            };
+
+            const stored = await receiptHandler.getModals(modalId);
+            if (stored) {
+                const receiptData = stored as IReceiptData;
+                receiptData.items = receiptData.items.filter(
+                    (i) => i.id !== itemId
+                );
+
+                await persistence.updateByAssociation(
+                    new RocketChatAssociationRecord(
+                        RocketChatAssociationModel.MISC,
+                        modalId
+                    ),
+                    receiptData,
+                    true
+                );
+
+                const blockBuilder = modify.getCreator().getBlockBuilder();
+                const updatedModal = await createEditReceiptModal(
+                    blockBuilder,
+                    receiptData,
+                    persistence,
+                    modalId
+                );
+
+                return context.getInteractionResponder().updateModalViewResponse(updatedModal);
+            }
         }
 
         return context.getInteractionResponder().successResponse();
@@ -607,8 +651,8 @@ export class ReceiptProcessorApp
         persistence: IPersistence,
         modify: IModify
     ): Promise<IUIKitResponse> {
-        this.getLogger().info("Block action handler called!");
-        const { user, view } = context.getInteractionData();
+        this.getLogger().info("View submit handler called!");
+        const { view } = context.getInteractionData();
         const modalId = view.id;
 
         const receiptHandler = new ReceiptHandler(
@@ -621,32 +665,34 @@ export class ReceiptProcessorApp
             const state = view.state as any;
             const receiptDate = state["receipt-edit-form"]?.receiptDate;
             const extraFee = Number(state["extra-fee"]?.extraFee || 0);
-            const discounts = Number(state["discounts"]?.extraFee || 0);
+            const discounts = Number(state["discounts"]?.discounts || 0);
             const totalPrice = Number(state["total-price"]?.totalPrice || 0);
-
-            const items: IReceiptItem[] = [];
-            let index = 0;
-            while (state[`item-name-${index}`]) {
-                const name = state[`item-name-${index}`]?.[`itemName-${index}`];
-                const quantity = Number(
-                    state[`item-quantity-${index}`]?.[
-                        `itemQuantity-${index}`
-                    ] || 0
-                );
-                const price = Number(
-                    state[`item-price-${index}`]?.[`itemPrice-${index}`] || 0
-                );
-
-                if (name) {
-                    items.push({ name, quantity, price });
-                }
-
-                index++;
-            }
 
             const stored = await receiptHandler.getModals(modalId);
             const originalData = stored as IReceiptData;
             const roomId = originalData.roomId;
+
+            const items: IReceiptItem[] = originalData.items.map((item) => {
+                const name =
+                    state[`item-name-${item.id}`]?.[`itemName-${item.id}`] ||
+                    item.name;
+                const quantity = Number(
+                    state[`item-quantity-${item.id}`]?.[
+                        `itemQuantity-${item.id}`
+                    ] || item.quantity
+                );
+                const price = Number(
+                    state[`item-price-${item.id}`]?.[`itemPrice-${item.id}`] ||
+                        item.price
+                );
+
+                return {
+                    id: item.id,
+                    name,
+                    quantity,
+                    price,
+                };
+            });
 
             const room = await read.getRoomReader().getById(roomId);
             if (!room) {
@@ -659,7 +705,7 @@ export class ReceiptProcessorApp
                 messageId: originalData.messageId,
                 threadId: originalData.threadId,
                 roomId: originalData.roomId,
-                receiptDate: originalData.receiptDate,
+                receiptDate: receiptDate || originalData.receiptDate,
                 extraFee,
                 discounts,
                 totalPrice,
@@ -681,6 +727,7 @@ export class ReceiptProcessorApp
 
             return context.getInteractionResponder().successResponse();
         } catch (error) {
+            this.getLogger().error("Error in executeViewSubmitHandler:", error);
             return context.getInteractionResponder().errorResponse();
         }
     }

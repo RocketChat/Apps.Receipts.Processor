@@ -20,6 +20,7 @@ import {
     BlockBuilder,
 } from "@rocket.chat/apps-engine/definition/uikit";
 import { ChannelService } from "../service/channelService";
+import { v4 as uuidv4 } from "uuid";
 
 export class ReceiptHandler {
     constructor(
@@ -50,6 +51,7 @@ export class ReceiptHandler {
             roomId: parsedData.roomId,
             items: parsedData.items.map(
                 (item: any): IReceiptItem => ({
+                    id: item.id,
                     name: item.name,
                     price: formatNumber(item.price),
                     quantity: item.quantity,
@@ -91,6 +93,7 @@ export class ReceiptHandler {
                 threadId,
                 items: parsedData.items.map(
                     (item: any): IReceiptItem => ({
+                        id: uuidv4(),
                         name: item.name,
                         price: item.price,
                         quantity: item.quantity,

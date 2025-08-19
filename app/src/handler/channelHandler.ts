@@ -29,8 +29,6 @@ export class ChannelHandler {
         processTextCommand: (cleanedMessage: string, message: IMessage) => Promise<void>
     ): Promise<void> {
         if (!isBotMentioned) return;
-
-        // Always let the LLM decide what the command is
         const cleanedMessage = this.removeBotMention(
             message.text || "",
             appUser.username
