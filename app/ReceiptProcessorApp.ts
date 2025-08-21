@@ -22,7 +22,7 @@ import {
     INVALID_IMAGE_RESPONSE,
     LLM_UNAVAILABLE_RESPONSE,
     FIRST_INSTALL_RESPONSE,
-    UNREGISTERED_CHANNEL_RESPONSE
+    UNREGISTERED_CHANNEL_RESPONSE,
 } from "./src/const/response";
 import { ReceiptCommand } from "./src/commands/ReceiptCommand";
 import { ImageHandler } from "./src/handler/imageHandler";
@@ -59,9 +59,7 @@ import {
     RocketChatAssociationRecord,
     RocketChatAssociationModel,
 } from "@rocket.chat/apps-engine/definition/metadata";
-import {
-    toDateString
-} from "./src/utils/date"
+import { toDateString } from "./src/utils/date";
 
 export class ReceiptProcessorApp
     extends App
@@ -232,7 +230,8 @@ export class ReceiptProcessorApp
             return;
         }
 
-        const hasImageAttachment = message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
+        const hasImageAttachment =
+            message.attachments?.some(ImageHandler.isImageAttachment) ?? false;
         const messageText = message.text?.trim() || "";
 
         if (hasImageAttachment) {
@@ -352,15 +351,15 @@ export class ReceiptProcessorApp
                         receiptDate: parsedResult.receiptDate,
                     };
 
+                    const currency = await receiptHandler.getCurrencySymbol(message.room.id)
                     const context = "The user just uploaded photo of a receipt";
-                    const response =
-                        "Ask the user if they want to save the data or not ?";
+                    const response = "Ask the user if they want to save the data or not ?";
                     const question = await botHandler.processResponse(
                         RESPONSE_PROMPT(
                             context,
                             result,
                             response,
-                            RECEIPT_PROCESSOR_INSTRUCTIONS
+                            RECEIPT_PROCESSOR_INSTRUCTIONS(currency)
                         )
                     );
 
@@ -506,13 +505,22 @@ export class ReceiptProcessorApp
             await modify.getCreator().finish(builder);
         } else if (data.actionId === "edit-receipt-data") {
             const blockBuilder = modify.getCreator().getBlockBuilder();
+            if (!data.message || !data.message.id) {
+                return context.getInteractionResponder().errorResponse();
+            }
+
             const modal = await createEditReceiptModal(
                 blockBuilder,
-                receiptData,
+                {
+                    ...receiptData,
+                    confirmationMessageId: data.message.id,
+                },
                 persistence
             );
 
-            return context.getInteractionResponder().openModalViewResponse(modal);
+            return context
+                .getInteractionResponder()
+                .openModalViewResponse(modal);
         } else if (data.actionId === "cancel-save-receipt" && appUser) {
             const builder = modify
                 .getCreator()
@@ -672,7 +680,9 @@ export class ReceiptProcessorApp
             const totalPrice = Number(state["total-price"]?.totalPrice || 0);
 
             const stored = await receiptHandler.getModals(modalId);
-            const originalData = stored as IReceiptData;
+            const originalData = stored as IReceiptData & {
+                confirmationMessageId?: string;
+            };
             const roomId = originalData.roomId;
 
             const items: IReceiptItem[] = originalData.items.map((item) => {
@@ -721,11 +731,24 @@ export class ReceiptProcessorApp
 
             const appUser = await this.getAppUser();
             if (!appUser) {
-                this.getLogger().error("App user not found.");
                 return context.getInteractionResponder().errorResponse();
             }
 
+            const existingReceipt = await receiptHandler.getReceiptByUniqueID(
+                originalData.userId,
+                originalData.messageId,
+                originalData.threadId,
+                originalData.roomId
+            );
+
             await receiptHandler.updateReceiptData(updatedData, room, appUser);
+            if (originalData.confirmationMessageId && appUser && !existingReceipt) {
+                const confirmationMessage = await read.getMessageReader().getById(originalData.confirmationMessageId);
+
+                if (confirmationMessage) {
+                    await modify.getDeleter().deleteMessage(confirmationMessage, appUser);
+                }
+            }
             await receiptHandler.deleteModal(modalId);
 
             return context.getInteractionResponder().successResponse();

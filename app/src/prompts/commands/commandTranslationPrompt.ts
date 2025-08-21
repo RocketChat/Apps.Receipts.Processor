@@ -1,7 +1,6 @@
 export const COMMAND_TRANSLATION_PROMPT_COMMANDS = `
 **Available Commands:**
-- "list" - Show user's receipts in current room
-- "room" - Show all receipts in current room
+- "room" - Show all receipts data in current room
 - "date" - Show user's receipts from specific date (requires date parameter)
 - "date_range" - Show user's receipts within a date range (requires startDate and endDate parameters)
 - "thread" - Show all receipts in current thread (must be in thread)
@@ -22,7 +21,8 @@ export const COMMAND_TRANSLATION_PROMPT_COMMANDS = `
 export const COMMAND_TRANSLATION_PROMPT_EXAMPLES = (current_date: string) => `
 Today's Date is ${current_date}
 **Examples:**
-User: "show me my receipts" → { "command": "list" }
+User: "show me my receipts" → { "command": "room" }
+User: "show me receipt data" → { "command": "room" }
 User: "show all receipts in this room" → { "command": "room" }
 User: "show receipts from 2024-01-15" → { "command": "date", "params": { "date": "2024-01-15" } }
 User: "show receipts on 2024-01-15" → { "command": "date", "params": { "date": "2024-01-15" } }
@@ -50,6 +50,7 @@ User: "spending report from 2024-07-01 to 2024-07-31" → { "command": "spending
 User: "show my spending summary" → { "command": "spending_report" }
 User: "show my food spending" → { "command": "spending_report", "params": { "category": "Food" } }
 User: "generate electronics spending report for last month" → { "command": "spending_report", "params": { "startDate": "2024-06-01", "endDate": "2024-06-30", "category": "Electronics" } }
+User: "generate report for my food spending in 2025" → { "command": "spending_report", "params": { "startDate": "2025-01-01", "endDate": "2025-12-31", "category": "Food" } }
 User: "spending report for household items" → { "command": "spending_report", "params": { "category": "Household" } }
 User: "create channel project-alpha" → { "command": "create_channel", "params": { "name": "project-alpha" } }
 User: "make a new channel called finance-team" → { "command": "create_channel", "params": { "name": "finance-team" } }

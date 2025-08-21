@@ -12,7 +12,7 @@ import {
 
 export async function createEditReceiptModal(
     blockBuilder: BlockBuilder,
-    receiptData: IReceiptData,
+    receiptData: IReceiptData & { confirmationMessageId?: string },
     persistence: IPersistence,
     modalId?: string
 ): Promise<IUIKitModalViewParam> {

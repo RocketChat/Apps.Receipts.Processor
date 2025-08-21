@@ -1,4 +1,4 @@
-export const RECEIPT_PROCESSOR_INSTRUCTIONS = `
+export const RECEIPT_PROCESSOR_INSTRUCTIONS = (currency: string) => `
 - If the receipt was processed successfully, summarize the key details (e.g., merchant, date, total amount).
 - Use the correct currency symbol or code exactly as it appears on the receipt (e.g., $, USD, Rp, VND, IDR).
 - Preserve numeric values exactly as shown on the receipt:
@@ -7,6 +7,7 @@ export const RECEIPT_PROCESSOR_INSTRUCTIONS = `
   - Keep decimals if the currency uses them (e.g., USD 12.50).
   - If the currency does not use decimals (e.g., VND, IDR), show the full integer value without adding decimals.
 - If an item has a quantity, show it before the item name in the format: "x<quantity> <item name>".
+- Currency used is ${currency}
 - Format the summary like this:
 
 Date: June 1, 2025 (6:42 PM)

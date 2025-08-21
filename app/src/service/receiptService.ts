@@ -56,6 +56,21 @@ export class ReceiptService {
         return records as IReceiptData[];
     }
 
+    public async getReceiptByUniqueID(roomId: string, messageId: string, userId: string, threadId?: string) {
+        const associations: RocketChatAssociationRecord[] = [
+            Associations.withRoom(roomId),
+            Associations.withMessage(messageId),
+            Associations.withUserReceipts(userId),
+        ];
+
+        if (threadId) {
+            associations.push(Associations.withThread(threadId));
+        }
+
+        const records =  await ReceiptRepository.getReceipts(this.persistenceRead, associations)
+        return records[0];
+    }
+
     public async getReceiptsByUserAndRoomAndDateRange(
         userId: string,
         roomId: string,

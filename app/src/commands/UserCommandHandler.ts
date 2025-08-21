@@ -17,11 +17,11 @@ import {
     CREATE_REPORT_INSTRUCTIONS,
     CREATE_CATEGORY_REPORT_INSTRUCTIONS,
 } from "../prompts/reports/createReportInstructions";
-import { UNABLE_TO_PROCESS_COMMAND_RESPONSE } from "../const/response"
+import { UNABLE_TO_PROCESS_COMMAND_RESPONSE } from "../const/response";
 import { ReceiptService } from "../service/receiptService";
 import { ISpendingReport, IReceiptData } from "../types/receipt";
 import { sendDownloadablePDF } from "../utils/pdfGenerator";
-import { RoomType } from "@rocket.chat/apps-engine/definition/rooms"
+import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 
 function parseDateString(dateStr: string): string | undefined {
     if (!dateStr) return undefined;
@@ -157,7 +157,9 @@ export class CommandHandler {
             params.currency = currencyMatch[1].toUpperCase();
         }
 
-        const createChannelMatch = message.match(/create\s+channel\s+([A-Za-z0-9-_]+)/i);
+        const createChannelMatch = message.match(
+            /create\s+channel\s+([A-Za-z0-9-_]+)/i
+        );
         if (createChannelMatch) {
             params.name = createChannelMatch[1];
         }
@@ -289,14 +291,16 @@ export class CommandHandler {
                         threadId
                     );
                 case "create_channel":
-                    return await this.createChannel(room, user, appUser, params, threadId);
-
-                default:
-                    return await this.fallbackResponse(
-                        appUser,
+                    return await this.createChannel(
                         room,
+                        user,
+                        appUser,
+                        params,
                         threadId
                     );
+
+                default:
+                    return await this.fallbackResponse(appUser, room, threadId);
             }
         } catch (error) {
             this.app.getLogger().error("Error executing command:", error);
@@ -650,13 +654,15 @@ export class CommandHandler {
             };
         }
 
-        const currency =
-            (await this.channelService.getCurrencyForChannel(room.id)) || "$";
+        const currency = (await this.channelService.getCurrencyForChannel(room.id)) || "$";
         const report: ISpendingReport = JSON.parse(cleanJSON);
-        report.extraFee =
-            this.receiptHandler.calculateTotalExtraFee(receiptDatas);
-        report.discounts =
-            this.receiptHandler.calculateTotalDiscounts(receiptDatas);
+        if (category && category.trim()) {
+            report.extraFee = 0;
+            report.discounts = 0;
+        } else {
+            report.extraFee = this.receiptHandler.calculateTotalExtraFee(receiptDatas);
+            report.discounts = this.receiptHandler.calculateTotalDiscounts(receiptDatas);
+        }
         await sendDownloadablePDF(
             this.modify,
             appUser,
@@ -732,7 +738,13 @@ export class CommandHandler {
         room: IRoom,
         threadId?: string
     ): Promise<CommandResult> {
-        sendMessage(this.modify, appUser, room, UNABLE_TO_PROCESS_COMMAND_RESPONSE, threadId);
+        sendMessage(
+            this.modify,
+            appUser,
+            room,
+            UNABLE_TO_PROCESS_COMMAND_RESPONSE,
+            threadId
+        );
         return { success: false };
     }
 
@@ -827,7 +839,7 @@ export class CommandHandler {
                 `✅ Channel **#${channelName}** has been created and registered successfully!`,
                 threadId
             );
-            await this.channelService.addChannel(newRoomId, user.id)
+            await this.channelService.addChannel(newRoomId, user.id);
 
             return {
                 success: true,

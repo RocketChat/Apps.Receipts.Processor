@@ -35,8 +35,10 @@ export class ReceiptHandler {
     private readonly receiptService: ReceiptService;
     private readonly channelService: ChannelService;
 
-    private async getCurrencySymbol(roomId: string): Promise<string> {
-        const currency = await this.channelService.getCurrencyForChannel(roomId);
+    public async getCurrencySymbol(roomId: string): Promise<string> {
+        const currency = await this.channelService.getCurrencyForChannel(
+            roomId
+        );
         return currency || "USD";
     }
 
@@ -141,11 +143,9 @@ export class ReceiptHandler {
 
         let summary = `*Items:*\n`;
         receipt.items.forEach((item) => {
-            const itemTotal = (item.price * item.quantity);
+            const itemTotal = item.price * item.quantity;
             if (item.quantity > 1) {
-                summary += `• ${item.name} (${
-                    item.quantity
-                } × ${currency}${item.price}) — ${currency}${itemTotal}\n`;
+                summary += `• ${item.name} (${item.quantity} × ${currency}${item.price}) — ${currency}${itemTotal}\n`;
             } else {
                 summary += `• ${item.name} — ${currency}${itemTotal}\n`;
             }
@@ -522,6 +522,24 @@ export class ReceiptHandler {
 
     public async deleteModal(modalId: string) {
         return this.receiptService.deleteModal(modalId);
+    }
+
+    public async getReceiptByUniqueID(
+        roomId: string,
+        messageId?: string | null,
+        userId?: string | null,
+        threadId?: string | null
+    ) {
+        if (!roomId || !messageId || !userId) {
+            return null;
+        }
+
+        return this.receiptService.getReceiptByUniqueID(
+            roomId,
+            messageId,
+            userId,
+            threadId || undefined
+        );
     }
 
     private calculateReceiptTotal(receipt: IReceiptData): number {
