@@ -22,26 +22,39 @@ import { ReceiptService } from "../service/receiptService";
 import { ISpendingReport, IReceiptData } from "../types/receipt";
 import { sendDownloadablePDF } from "../utils/pdfGenerator";
 import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
+import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
+import { CommandParseHandler } from "./CommandParserHandler";
+import {
+    COMMAND_TRANSLATION_PROMPT_COMMANDS,
+    COMMAND_TRANSLATION_PROMPT_EXAMPLES,
+} from "../prompts/commands/commandTranslationPrompt";
+import {
+    COMMAND_TRANSLATION_PROMPT
+} from "../prompt_library/const/prompt"
 
-function parseDateString(dateStr: string): string | undefined {
+function parseDateString(dateStr?: string): string | undefined {
     if (!dateStr) return undefined;
 
-    const normalized = dateStr.replace(/\//g, "-");
-    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-        const dateParts = normalized.split("-");
-        const year = parseInt(dateParts[0], 10);
-        const month = parseInt(dateParts[1], 10) - 1;
-        const day = parseInt(dateParts[2], 10);
-        const date = new Date(year, month, day);
-
-        if (
-            date.getFullYear() === year &&
-            date.getMonth() === month &&
-            date.getDate() === day
-        ) {
-            return normalized;
-        }
+    const normalized = dateStr.trim().replace(/\//g, "-");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        return undefined;
     }
+
+    const [yearStr, monthStr, dayStr] = normalized.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr) - 1;
+    const day = Number(dayStr);
+
+    const date = new Date(year, month, day);
+
+    if (
+        date.getFullYear() === year &&
+        date.getMonth() === month &&
+        date.getDate() === day
+    ) {
+        return normalized;
+    }
+
     return undefined;
 }
 
@@ -77,6 +90,44 @@ export class CommandHandler {
         );
         this.botHandler = new BotHandler(this.http, this.read);
         this.appUser = appUser;
+    }
+
+    public async handleMessage(
+        message: IMessage,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify
+    ): Promise<void> {
+        try {
+            const currentDate = new Date().toISOString().slice(0, 10);
+            const commandTranslationPrompt = COMMAND_TRANSLATION_PROMPT(
+                COMMAND_TRANSLATION_PROMPT_COMMANDS,
+                COMMAND_TRANSLATION_PROMPT_EXAMPLES(currentDate),
+                message.text || ""
+            );
+
+            const commandJson = await this.botHandler.processResponse(commandTranslationPrompt);
+            const parsedCommand = JSON.parse(commandJson);
+            const params = parsedCommand.params || CommandParseHandler.extractParams(message.text || "") || {};
+
+            await this.executeCommand(
+                parsedCommand.command,
+                message.room,
+                message.sender,
+                params,
+                message.threadId
+            );
+        } catch (error) {
+            this.app.getLogger().error("Error in handleMessage:", error);
+            await this.executeCommand(
+                "help",
+                message.room,
+                message.sender,
+                {},
+                message.threadId
+            );
+        }
     }
 
     static isAddChannelCommand(messageText: string): boolean {
@@ -126,47 +177,6 @@ export class CommandHandler {
         return keywords.some((keyword) => lowerText.includes(keyword));
     }
 
-    static extractParams(message: string): any {
-        const params: any = {};
-        const dateRangeMatch = message.match(
-            /from\s+(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})/i
-        );
-
-        if (dateRangeMatch) {
-            params.startDate = dateRangeMatch[1];
-            params.endDate = dateRangeMatch[2];
-        } else {
-            const dateMatch = message.match(
-                /(?:(?:from|for|on)\s+)?(\d{4}-\d{2}-\d{2})/i
-            );
-
-            if (dateMatch && dateMatch[1]) {
-                params.date = dateMatch[1];
-            }
-        }
-
-        const searchMatch = message.match(
-            /(?:with|for|containing|about)\s+(.+)/i
-        );
-        if (searchMatch) {
-            params.searchTerm = searchMatch[1].trim();
-        }
-
-        const currencyMatch = message.match(/currency\s+([A-Za-z]{3})/i);
-        if (currencyMatch) {
-            params.currency = currencyMatch[1].toUpperCase();
-        }
-
-        const createChannelMatch = message.match(
-            /create\s+channel\s+([A-Za-z0-9-_]+)/i
-        );
-        if (createChannelMatch) {
-            params.name = createChannelMatch[1];
-        }
-
-        return Object.keys(params).length > 0 ? params : undefined;
-    }
-
     public async executeCommand(
         command: string,
         room: IRoom,
@@ -183,12 +193,18 @@ export class CommandHandler {
                 };
             }
 
-            const startDate = params?.startDate
-                ? parseDateString(params.startDate)
-                : undefined;
-            const endDate = params?.endDate
-                ? parseDateString(params.endDate)
-                : undefined;
+            let startDate: string | undefined;
+            let endDate: string | undefined;
+            let parsedDateParam: string | undefined;
+
+            if (params) {
+                if ("startDate" in params && "endDate" in params) {
+                    startDate = parseDateString(params.startDate);
+                    endDate = parseDateString(params.endDate);
+                } else if ("date" in params) {
+                    parsedDateParam = parseDateString(params.date);
+                }
+            }
 
             this.app.getLogger().info(`Executing command: ${command}`, params);
 
@@ -211,9 +227,6 @@ export class CommandHandler {
                     );
 
                 case "date":
-                    const parsedDateParam = params?.date
-                        ? parseDateString(params.date)
-                        : undefined;
                     return await this.listReceiptsByDate(
                         user,
                         room,
@@ -272,16 +285,16 @@ export class CommandHandler {
                     return await this.showHelp(appUser, room, threadId);
 
                 case "spending_report":
-                    const category = params?.category;
                     return await this.showReport(
                         room,
                         user,
                         appUser,
                         threadId,
-                        category,
+                        params?.category,
                         startDate,
                         endDate
                     );
+
                 case "set_room_currency":
                     return await this.setRoomCurrency(
                         room,
@@ -290,6 +303,7 @@ export class CommandHandler {
                         params,
                         threadId
                     );
+
                 case "create_channel":
                     return await this.createChannel(
                         room,
@@ -654,14 +668,17 @@ export class CommandHandler {
             };
         }
 
-        const currency = (await this.channelService.getCurrencyForChannel(room.id)) || "$";
+        const currency =
+            (await this.channelService.getCurrencyForChannel(room.id)) || "$";
         const report: ISpendingReport = JSON.parse(cleanJSON);
         if (category && category.trim()) {
             report.extraFee = 0;
             report.discounts = 0;
         } else {
-            report.extraFee = this.receiptHandler.calculateTotalExtraFee(receiptDatas);
-            report.discounts = this.receiptHandler.calculateTotalDiscounts(receiptDatas);
+            report.extraFee =
+                this.receiptHandler.calculateTotalExtraFee(receiptDatas);
+            report.discounts =
+                this.receiptHandler.calculateTotalDiscounts(receiptDatas);
         }
         await sendDownloadablePDF(
             this.modify,

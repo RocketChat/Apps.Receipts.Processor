@@ -52,7 +52,7 @@ export class ReceiptHandler {
             threadId: parsedData.threadId,
             roomId: parsedData.roomId,
             items: parsedData.items.map(
-                (item: any): IReceiptItem => ({
+                (item: IReceiptItem) => ({
                     id: item.id,
                     name: item.name,
                     price: formatNumber(item.price),
@@ -94,7 +94,7 @@ export class ReceiptHandler {
                 roomId,
                 threadId,
                 items: parsedData.items.map(
-                    (item: any): IReceiptItem => ({
+                    (item: IReceiptItem) => ({
                         id: uuidv4(),
                         name: item.name,
                         price: item.price,
