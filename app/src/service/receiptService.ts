@@ -31,9 +31,9 @@ export class ReceiptService {
         return receipts
     }
 
-    public async getReceiptsByUserAndUploadedDate(roomId: string, uploadedDate: string) {
+    public async getReceiptsByUserAndReceiptDate(roomId: string, receiptDate: string) {
         const roomAssociationKey = Associations.withRoom(roomId)
-        const dateAssociationKey = Associations.withDate(uploadedDate)
+        const dateAssociationKey = Associations.withDate(receiptDate)
 
         const receipts = await ReceiptRepository.getReceipts(this.persistenceRead, [roomAssociationKey, dateAssociationKey])
         return receipts
@@ -56,6 +56,21 @@ export class ReceiptService {
         return records as IReceiptData[];
     }
 
+    public async getReceiptByUniqueID(roomId: string, messageId: string, userId: string, threadId?: string) {
+        const associations: RocketChatAssociationRecord[] = [
+            Associations.withRoom(roomId),
+            Associations.withMessage(messageId),
+            Associations.withUserReceipts(userId),
+        ];
+
+        if (threadId) {
+            associations.push(Associations.withThread(threadId));
+        }
+
+        const records =  await ReceiptRepository.getReceipts(this.persistenceRead, associations)
+        return records[0];
+    }
+
     public async getReceiptsByUserAndRoomAndDateRange(
         userId: string,
         roomId: string,
@@ -71,10 +86,10 @@ export class ReceiptService {
         );
 
         const filteredReceipts = allUserRoomReceipts.filter(receipt => {
-            if (!receipt.uploadedDate) {
+            if (!receipt.receiptDate) {
                 return false;
             }
-            return receipt.uploadedDate >= startDate && receipt.uploadedDate <= endDate;
+            return receipt.receiptDate >= startDate && receipt.receiptDate <= endDate;
         });
 
         return filteredReceipts;

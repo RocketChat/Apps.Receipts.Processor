@@ -1,4 +1,5 @@
 export interface IReceiptItem {
+    id: string;
     name: string;
     price: number;
     quantity: number;
@@ -11,8 +12,8 @@ export interface IReceiptData {
     roomId : string;
     items: IReceiptItem[];
     extraFee: number;
+    discounts: number;
     totalPrice: number;
-    uploadedDate: string;
     receiptDate: string;
 }
 
@@ -27,4 +28,5 @@ export interface ISpendingReport {
     categories: ICategory[];
     summary: string;
     extraFee: number;
+    discounts: number;
 }

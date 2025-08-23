@@ -1,5 +1,4 @@
 import {
-    ILogger,
     IPersistence,
     IPersistenceRead,
 } from "@rocket.chat/apps-engine/definition/accessors";
@@ -34,4 +33,28 @@ export const getChannels = async (
         return result[0] as string[];
     }
     return [];
+};
+
+export const setCurrencyForChannel = async (
+    persistence: IPersistence,
+    currencyAssoc: RocketChatAssociationRecord,
+    currency: string
+): Promise<void> => {
+    await persistence.updateByAssociation(
+        currencyAssoc,
+        { currency },
+        true
+    );
+};
+
+export const getCurrencyForChannel = async (
+    persistenceRead: IPersistenceRead,
+    currencyAssoc: RocketChatAssociationRecord
+): Promise<string | null> => {
+    const result = await persistenceRead.readByAssociation(currencyAssoc);
+
+    if (result.length > 0 && typeof result[0] === "object" && "currency" in result[0]) {
+        return (result[0] as { currency: string }).currency;
+    }
+    return null;
 };

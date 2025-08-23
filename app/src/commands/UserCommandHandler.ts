@@ -16,30 +16,45 @@ import { RESPONSE_PROMPT } from "../../src/prompt_library/const/prompt";
 import {
     CREATE_REPORT_INSTRUCTIONS,
     CREATE_CATEGORY_REPORT_INSTRUCTIONS,
-} from "../const/prompt";
+} from "../prompts/reports/createReportInstructions";
+import { UNABLE_TO_PROCESS_COMMAND_RESPONSE } from "../const/response";
 import { ReceiptService } from "../service/receiptService";
 import { ISpendingReport, IReceiptData } from "../types/receipt";
 import { sendDownloadablePDF } from "../utils/pdfGenerator";
+import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
+import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
+import { CommandParseHandler } from "./CommandParserHandler";
+import {
+    COMMAND_TRANSLATION_PROMPT_COMMANDS,
+    COMMAND_TRANSLATION_PROMPT_EXAMPLES,
+} from "../prompts/commands/commandTranslationPrompt";
+import {
+    COMMAND_TRANSLATION_PROMPT
+} from "../prompt_library/const/prompt"
 
-function parseDateString(dateStr: string): string | undefined {
+function parseDateString(dateStr?: string): string | undefined {
     if (!dateStr) return undefined;
 
-    const normalized = dateStr.replace(/\//g, "-");
-    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-        const dateParts = normalized.split("-");
-        const year = parseInt(dateParts[0], 10);
-        const month = parseInt(dateParts[1], 10) - 1;
-        const day = parseInt(dateParts[2], 10);
-        const date = new Date(year, month, day);
-
-        if (
-            date.getFullYear() === year &&
-            date.getMonth() === month &&
-            date.getDate() === day
-        ) {
-            return normalized;
-        }
+    const normalized = dateStr.trim().replace(/\//g, "-");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        return undefined;
     }
+
+    const [yearStr, monthStr, dayStr] = normalized.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr) - 1;
+    const day = Number(dayStr);
+
+    const date = new Date(year, month, day);
+
+    if (
+        date.getFullYear() === year &&
+        date.getMonth() === month &&
+        date.getDate() === day
+    ) {
+        return normalized;
+    }
+
     return undefined;
 }
 
@@ -75,6 +90,44 @@ export class CommandHandler {
         );
         this.botHandler = new BotHandler(this.http, this.read);
         this.appUser = appUser;
+    }
+
+    public async handleMessage(
+        message: IMessage,
+        read: IRead,
+        http: IHttp,
+        persistence: IPersistence,
+        modify: IModify
+    ): Promise<void> {
+        try {
+            const currentDate = new Date().toISOString().slice(0, 10);
+            const commandTranslationPrompt = COMMAND_TRANSLATION_PROMPT(
+                COMMAND_TRANSLATION_PROMPT_COMMANDS,
+                COMMAND_TRANSLATION_PROMPT_EXAMPLES(currentDate),
+                message.text || ""
+            );
+
+            const commandJson = await this.botHandler.processResponse(commandTranslationPrompt);
+            const parsedCommand = JSON.parse(commandJson);
+            const params = parsedCommand.params || CommandParseHandler.extractParams(message.text || "") || {};
+
+            await this.executeCommand(
+                parsedCommand.command,
+                message.room,
+                message.sender,
+                params,
+                message.threadId
+            );
+        } catch (error) {
+            this.app.getLogger().error("Error in handleMessage:", error);
+            await this.executeCommand(
+                "help",
+                message.room,
+                message.sender,
+                {},
+                message.threadId
+            );
+        }
     }
 
     static isAddChannelCommand(messageText: string): boolean {
@@ -124,35 +177,6 @@ export class CommandHandler {
         return keywords.some((keyword) => lowerText.includes(keyword));
     }
 
-    static extractParams(message: string): any {
-        const params: any = {};
-        const dateRangeMatch = message.match(
-            /from\s+(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})/i
-        );
-
-        if (dateRangeMatch) {
-            params.startDate = dateRangeMatch[1];
-            params.endDate = dateRangeMatch[2];
-        } else {
-            const dateMatch = message.match(
-                /(?:(?:from|for|on)\s+)?(\d{4}-\d{2}-\d{2})/i
-            );
-
-            if (dateMatch && dateMatch[1]) {
-                params.date = dateMatch[1];
-            }
-        }
-
-        const searchMatch = message.match(
-            /(?:with|for|containing|about)\s+(.+)/i
-        );
-        if (searchMatch) {
-            params.searchTerm = searchMatch[1].trim();
-        }
-
-        return Object.keys(params).length > 0 ? params : undefined;
-    }
-
     public async executeCommand(
         command: string,
         room: IRoom,
@@ -169,12 +193,18 @@ export class CommandHandler {
                 };
             }
 
-            const startDate = params?.startDate
-                ? parseDateString(params.startDate)
-                : undefined;
-            const endDate = params?.endDate
-                ? parseDateString(params.endDate)
-                : undefined;
+            let startDate: string | undefined;
+            let endDate: string | undefined;
+            let parsedDateParam: string | undefined;
+
+            if (params) {
+                if ("startDate" in params && "endDate" in params) {
+                    startDate = parseDateString(params.startDate);
+                    endDate = parseDateString(params.endDate);
+                } else if ("date" in params) {
+                    parsedDateParam = parseDateString(params.date);
+                }
+            }
 
             this.app.getLogger().info(`Executing command: ${command}`, params);
 
@@ -197,9 +227,6 @@ export class CommandHandler {
                     );
 
                 case "date":
-                    const parsedDateParam = params?.date
-                        ? parseDateString(params.date)
-                        : undefined;
                     return await this.listReceiptsByDate(
                         user,
                         room,
@@ -258,24 +285,36 @@ export class CommandHandler {
                     return await this.showHelp(appUser, room, threadId);
 
                 case "spending_report":
-                    const category = params?.category;
                     return await this.showReport(
                         room,
                         user,
                         appUser,
                         threadId,
-                        category,
+                        params?.category,
                         startDate,
                         endDate
                     );
 
-                case "unknown":
-                default:
-                    return await this.handleUnknownCommand(
-                        appUser,
+                case "set_room_currency":
+                    return await this.setRoomCurrency(
                         room,
+                        user,
+                        appUser,
+                        params,
                         threadId
                     );
+
+                case "create_channel":
+                    return await this.createChannel(
+                        room,
+                        user,
+                        appUser,
+                        params,
+                        threadId
+                    );
+
+                default:
+                    return await this.fallbackResponse(appUser, room, threadId);
             }
         } catch (error) {
             this.app.getLogger().error("Error executing command:", error);
@@ -566,8 +605,11 @@ export class CommandHandler {
         );
 
         let receiptDatas: IReceiptData[];
-        if(threadId) {
-            receiptDatas = await this.receiptService.getReceiptsByThread(room.id, threadId)
+        if (threadId) {
+            receiptDatas = await this.receiptService.getReceiptsByThread(
+                room.id,
+                threadId
+            );
         } else {
             if (startDate && endDate) {
                 receiptDatas =
@@ -578,10 +620,11 @@ export class CommandHandler {
                         endDate
                     );
             } else {
-                receiptDatas = await this.receiptService.getReceiptsByUserAndRoom(
-                    user.id,
-                    room.id
-                );
+                receiptDatas =
+                    await this.receiptService.getReceiptsByUserAndRoom(
+                        user.id,
+                        room.id
+                    );
             }
         }
 
@@ -625,15 +668,25 @@ export class CommandHandler {
             };
         }
 
-        const extraFee = this.receiptHandler.calculateTotalExtraFee(receiptDatas)
+        const currency =
+            (await this.channelService.getCurrencyForChannel(room.id)) || "$";
         const report: ISpendingReport = JSON.parse(cleanJSON);
-        report.extraFee = extraFee
+        if (category && category.trim()) {
+            report.extraFee = 0;
+            report.discounts = 0;
+        } else {
+            report.extraFee =
+                this.receiptHandler.calculateTotalExtraFee(receiptDatas);
+            report.discounts =
+                this.receiptHandler.calculateTotalDiscounts(receiptDatas);
+        }
         await sendDownloadablePDF(
             this.modify,
             appUser,
             room,
             "spending_report.pdf",
             report,
+            currency,
             "Here is your spending report.",
             threadId
         );
@@ -647,7 +700,7 @@ export class CommandHandler {
         threadId?: string
     ): Promise<CommandResult> {
         const helpMessage = `
-            👋 **Hi there! I'm here to help you manage your receipts.**
+        👋 **Hi there! I'm here to help you manage your receipts.**
 
             Here are some things you can ask me to do:
 
@@ -672,34 +725,153 @@ export class CommandHandler {
             - **Add this channel:**
             Say "@bot add this channel to my list" or "@bot subscribe to this room" to start tracking receipts here.
 
+            - **Create new channel**
+            Say "@bot create channel my-spending" to create a new channel and register it directly
+
+            - **Set currency for this channel:**
+            Change the currency symbol used in summaries by saying:
+            "@bot set currency to $" or "@bot set currency to EUR" or "@bot set currency to ฿".
+
+            - **Generate spending reports:**
+            Get a summary of your spending by saying:
+            "@bot generate report for this month",
+            "@bot spending report from 2024-07-01 to 2024-07-31",
+            or "@bot monthly report".
+
             - **Need help?**
             Just ask "@bot help" or "@bot what can you do?".
 
             **Tip:** You can also upload receipt images directly—no need to mention me! I’ll process them automatically.
 
-            If you ever get stuck or have a question, just let me know. I’m always here to help!`;
+            If you ever get stuck or have a question, just let me know. I’m always here to help!
+        `;
 
         sendMessage(this.modify, appUser, room, helpMessage.trim(), threadId);
         return { success: true };
     }
 
-    private async handleUnknownCommand(
+    private async fallbackResponse(
         appUser: IUser,
         room: IRoom,
         threadId?: string
     ): Promise<CommandResult> {
-        const context =
-            "The user entered a command or message that the bot does not recognize or support. The user may be trying to interact with the receipt processor bot, but the intent is unclear.";
-        const response =
-            "I'm not sure I understood that. If you need help with your receipts or want to know what I can do, just let me know by asking for help!";
-        const instructions =
-            "Respond in a friendly, concise, and encouraging way. Let the user know their message wasn't understood, and suggest they ask for help or try rephrasing. Do not use the exact words from the example; vary the wording and keep it open-ended.";
-
-        const processResponse = await this.botHandler.processResponse(
-            RESPONSE_PROMPT(context, "", response, instructions)
+        sendMessage(
+            this.modify,
+            appUser,
+            room,
+            UNABLE_TO_PROCESS_COMMAND_RESPONSE,
+            threadId
         );
-
-        sendMessage(this.modify, appUser, room, processResponse, threadId);
         return { success: false };
+    }
+
+    private async setRoomCurrency(
+        room: IRoom,
+        user: IUser,
+        appUser: IUser,
+        params?: CommandParams,
+        threadId?: string
+    ): Promise<CommandResult> {
+        try {
+            const currency = params?.currency || params?.searchTerm;
+
+            if (
+                !currency ||
+                typeof currency !== "string" ||
+                currency.trim() === ""
+            ) {
+                sendMessage(
+                    this.modify,
+                    appUser,
+                    room,
+                    "❌ Please provide a valid currency code. Example: `set room currency USD`",
+                    threadId
+                );
+                return { success: false, message: "Invalid currency" };
+            }
+
+            await this.channelService.setCurrencyForChannel(
+                room.id,
+                currency.trim().toUpperCase()
+            );
+
+            sendMessage(
+                this.modify,
+                appUser,
+                room,
+                `✅ Currency for this room has been set to **${currency
+                    .trim()
+                    .toUpperCase()}**.`,
+                threadId
+            );
+
+            return { success: true };
+        } catch (error) {
+            this.app.getLogger().error("Error setting room currency:", error);
+            sendMessage(
+                this.modify,
+                appUser,
+                room,
+                "❌ Failed to set currency for this room.",
+                threadId
+            );
+            return { success: false };
+        }
+    }
+
+    private async createChannel(
+        room: IRoom,
+        user: IUser,
+        appUser: IUser,
+        params?: CommandParams,
+        threadId?: string
+    ): Promise<CommandResult> {
+        try {
+            const channelName = params?.searchTerm || params?.name;
+            if (!channelName || typeof channelName !== "string") {
+                sendMessage(
+                    this.modify,
+                    appUser,
+                    room,
+                    "❌ Please provide a valid channel name. Example: `create channel daily-coffee-spending`",
+                    threadId
+                );
+                return { success: false, message: "Invalid channel name" };
+            }
+            const creator = this.modify.getCreator();
+            const newRoomBuilder = creator
+                .startRoom()
+                .setCreator(user)
+                .setType(RoomType.CHANNEL)
+                .setDisplayName(channelName)
+                .setSlugifiedName(
+                    channelName.toLowerCase().replace(/\s+/g, "-")
+                );
+
+            const newRoomId = await creator.finish(newRoomBuilder);
+            sendMessage(
+                this.modify,
+                appUser,
+                room,
+                `✅ Channel **#${channelName}** has been created and registered successfully!`,
+                threadId
+            );
+            await this.channelService.addChannel(newRoomId, user.id);
+
+            return {
+                success: true,
+                message: `Channel created with ID: ${newRoomId}`,
+            };
+        } catch (error) {
+            this.app.getLogger().error("Error creating channel:", error);
+            sendMessage(
+                this.modify,
+                appUser,
+                room,
+                "❌ Failed to create the channel. Please try again by using different channel name.",
+                threadId
+            );
+            return { success: false };
+        }
     }
 }

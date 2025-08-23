@@ -1,5 +1,5 @@
-import { IModify } from "@rocket.chat/apps-engine/definition/accessors";
 import { IRoom } from "@rocket.chat/apps-engine/definition/rooms";
+import { IRead, IModify } from "@rocket.chat/apps-engine/definition/accessors";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
 import { ButtonStyle } from "@rocket.chat/apps-engine/definition/uikit";
 import { IReceiptData } from "../types/receipt";
@@ -8,6 +8,7 @@ import {
     IMessageFile,
     IMessageAttachment,
 } from "@rocket.chat/apps-engine/definition/messages";
+import { getOrCreateDirectRoom } from "./rooms"
 
 export async function sendMessage(
     modify: IModify,
@@ -70,7 +71,7 @@ export async function sendConfirmationButtons(
             block.newButtonElement({
                 text: block.newPlainTextObject("❌ No"),
                 actionId: "cancel-save-receipt",
-                value: "cancel",
+                value: JSON.stringify(receiptData),
                 style: ButtonStyle.DANGER,
             }),
         ],
@@ -79,6 +80,33 @@ export async function sendConfirmationButtons(
     builder.setBlocks(block);
 
     await modify.getCreator().finish(builder);
+}
+
+export async function sendDirectMessage(
+    read: IRead,
+    modify: IModify,
+    targetUser: IUser,
+    text: string
+): Promise<void> {
+    const appUser = await read.getUserReader().getAppUser();
+    if (!appUser) {
+        throw new Error("App user not found.");
+    }
+    const directRoom = await getOrCreateDirectRoom(
+        read,
+        modify,
+        appUser,
+        targetUser
+    );
+
+    const messageBuilder = modify
+        .getCreator()
+        .startMessage()
+        .setSender(appUser)
+        .setRoom(directRoom)
+        .setText(text);
+
+    await modify.getCreator().finish(messageBuilder);
 }
 
 export async function sendDownloadableFile(
@@ -167,9 +195,7 @@ export async function sendDownloadableFile(
             .setSender(user)
             .setRoom(room)
             .setText(
-                `❌ Failed to upload file: ${
-                    error instanceof Error ? error.message : String(error)
-                }`
+                `❌ Failed to upload file: ${error instanceof Error ? error.message : String(error)}`
             );
 
         if (threadId) {

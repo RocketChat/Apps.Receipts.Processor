@@ -13,8 +13,8 @@
 <h2>Features 🚀</h2>
 <ul>
   <li>Scan and store expense data from receipts sent via images</li> 
-  <li>Data can be grouped according to user by using channels</li>
-  <li>Create comprehensive, customizable reports segmented by group, time period, or individual user</li>
+  <li>Data can be grouped according to user by using channels or threads</li>
+  <li>Create comprehensive reports segmented by categories and time periods</li>
   <li>Support custom LLM selection</li>
   <li>Detect and block malicious prompt injection</li>
 </ul>
@@ -59,6 +59,9 @@ make deploy url=&lt;URL&gt; username=&lt;USERNAME&gt; password=&lt;PASSWORD&gt;
     <li><code>username</code> is the username of your admin user.</li>
     <li><code>password</code> is the password of your admin user.</li>
   </ul>
+  <br>
+  <li><b>Open the App Settings</b> by navigating to <code>Administration &gt; Marketplace &gt; Private Apps</code>.  
+  You should see the app listed there. Click on the app name to open it, then go to <b>Settings</b> and add your LLM provider configuration.</li>
 </ol>
 
 <h2>Usage 💬</h2>
