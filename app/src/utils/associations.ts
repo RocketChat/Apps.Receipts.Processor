@@ -13,6 +13,15 @@ export class Associations {
         );
     }
 
+    public static withChannelCurrency(
+        roomId: string
+    ): RocketChatAssociationRecord {
+        return new RocketChatAssociationRecord(
+            RocketChatAssociationModel.ROOM,
+            `${roomId}:currency`
+        );
+    }
+
     public static withUserReceipts(userId: string): RocketChatAssociationRecord {
         return new RocketChatAssociationRecord(
             RocketChatAssociationModel.USER,

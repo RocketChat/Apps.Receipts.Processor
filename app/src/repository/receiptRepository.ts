@@ -17,7 +17,7 @@ export const addReceipt = async (
         Associations.withRoom(data.roomId),
         Associations.withMessage(data.messageId),
         Associations.withUserReceipts(data.userId),
-        Associations.withDate(data.uploadedDate),
+        Associations.withDate(data.receiptDate),
     ];
 
     if (data.threadId) {
@@ -51,7 +51,7 @@ export const updateReceipt = async (
         Associations.withRoom(data.roomId),
         Associations.withMessage(data.messageId),
         Associations.withUserReceipts(data.userId),
-        Associations.withDate(data.uploadedDate),
+        Associations.withDate(data.receiptDate),
     ];
 
     if (data.threadId) {

@@ -27,8 +27,37 @@ export interface CommandResult {
     data?: any;
 }
 
-export interface CommandParams {
-    date?: string;
+export interface CommandParamsBase {
     searchTerm?: string;
-    [key: string]: any;
+    currency?: string;
+    name?: string;
+    category?: string;
 }
+
+export interface CommandParamsSingleDate extends CommandParamsBase {
+    date: string;
+    startDate?: never;
+    endDate?: never;
+}
+
+export interface CommandParamsDateRange extends CommandParamsBase {
+    startDate: string;
+    endDate: string;
+    date?: never;
+}
+
+export type CommandParams =
+    | CommandParamsSingleDate
+    | CommandParamsDateRange
+    | CommandParamsBase;
+
+// Builder type: all keys optional (for parsing convenience)
+export type CommandParamsBuilder = {
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+    searchTerm?: string;
+    currency?: string;
+    name?: string;
+    category?: string;
+};

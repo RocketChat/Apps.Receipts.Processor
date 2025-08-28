@@ -5,6 +5,7 @@ import { TextRequest } from "../prompt_library/const/types";
 import { getAPIConfig } from "../config/settings";
 import { getLLMConfigFromValues } from "../prompt_library/config";
 import { IUser } from "@rocket.chat/apps-engine/definition/users";
+import { RoomType } from "@rocket.chat/apps-engine/definition/rooms";
 
 export class BotHandler {
     private llmClient: LLMClient;
@@ -35,28 +36,34 @@ export class BotHandler {
 
     public async isBotMentioned(
         message: IMessage,
-        appUser: IUser,
+        appUser: IUser
     ): Promise<boolean> {
         try {
+            const room = message.room;
+            if (room.type === RoomType.DIRECT_MESSAGE) {
+                const roomUsernames = room.usernames || [];
+                const botExist = roomUsernames.includes(appUser.username);
+                if (botExist) {
+                    return true;
+                }
+            }
+
             const messageText = message.text?.toLowerCase() || "";
             if (!messageText) return false;
+
             const botUsername = appUser.username.toLowerCase();
             this.appUsername = botUsername;
 
             const mentionPatterns = [
-                new RegExp(`@${this.escapeRegex(botUsername)}(?:[,\\s]|$)`, "i"),
+                new RegExp(
+                    `@${this.escapeRegex(botUsername)}(?:[,\\s]|$)`,
+                    "i"
+                ),
                 new RegExp(`^@${this.escapeRegex(botUsername)}\\b`, "i"),
                 new RegExp(`\\b@${this.escapeRegex(botUsername)}\\b`, "i"),
             ];
 
-            const isMentioned = mentionPatterns.some((pattern) =>
-                pattern.test(messageText)
-            );
-
-            if (isMentioned) {
-                return true;
-            }
-            return false;
+            return mentionPatterns.some((pattern) => pattern.test(messageText));
         } catch (error) {
             return false;
         }

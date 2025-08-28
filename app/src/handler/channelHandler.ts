@@ -1,12 +1,11 @@
 import {
     IRead,
-    IHttp,
     IPersistence,
-    IPersistenceRead,
+    IModify,
 } from "@rocket.chat/apps-engine/definition/accessors";
 import { IMessage } from "@rocket.chat/apps-engine/definition/messages";
 import { ChannelService } from "../service/channelService";
-import { sendMessage } from "../utils/message";
+import { IUser } from "@rocket.chat/apps-engine/definition/users";
 
 export class ChannelHandler {
     constructor(
@@ -24,26 +23,18 @@ export class ChannelHandler {
 
     public async handleUnregisteredChannel(
         isBotMentioned: boolean,
-        isAddChannel: boolean,
         message: IMessage,
-        modify: any,
-        appUser: any,
+        modify: IModify,
+        appUser: IUser,
         processTextCommand: (cleanedMessage: string, message: IMessage) => Promise<void>
     ): Promise<void> {
         if (!isBotMentioned) return;
+        const cleanedMessage = this.removeBotMention(
+            message.text || "",
+            appUser.username
+        );
 
-        if (isAddChannel) {
-            const cleanedMessage = this.removeBotMention(message.text || "", appUser.username);
-            await processTextCommand(cleanedMessage, message);
-        } else {
-            await sendMessage(
-                modify,
-                appUser,
-                message.room,
-                "This channel is not registered. Please use `add channel` command to register it.",
-                message.threadId
-            );
-        }
+        await processTextCommand(cleanedMessage, message);
     }
 
     private removeBotMention(messageText: string, botUsername: string): string {

@@ -1,7 +1,7 @@
 import { fetchDataHf, llmResponse } from "./ApiCalls";
 import { Row } from "./interfaces";
 import { describe, expect, beforeAll, test, afterAll } from "@jest/globals";
-import { OCR_SYSTEM_PROMPT } from "../../app/src/const/prompt";
+import { OCR_SYSTEM_PROMPT } from "../../app/src/prompts/ocr/ocrSystemPrompt";
 import { LENGTH } from "./constants";
 import nock from "nock";
 
