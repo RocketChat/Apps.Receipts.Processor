@@ -17,6 +17,7 @@ export async function createEditReceiptModal(
     modalId?: string
 ): Promise<IUIKitModalViewParam> {
     const id =  modalId || `edit-receipt-modal-${receiptData.userId}-${Date.now()}`;
+
     blockBuilder
         .addInputBlock({
             blockId: "receipt-edit-form",
@@ -62,20 +63,22 @@ export async function createEditReceiptModal(
             }),
         });
 
-        blockBuilder.addActionsBlock({
-            blockId: `remove-item-${item.id}`,
-            elements: [
-                blockBuilder.newButtonElement({
-                    actionId: `removeItem-${item.id}`,
-                    text: blockBuilder.newPlainTextObject("🗑 Remove Item"),
-                    value: JSON.stringify({
-                        modalId: id,
-                        itemId: item.id,
+        if (receiptData.items.length > 1) {
+            blockBuilder.addActionsBlock({
+                blockId: `remove-item-${item.id}`,
+                elements: [
+                    blockBuilder.newButtonElement({
+                        actionId: `removeItem-${item.id}`,
+                        text: blockBuilder.newPlainTextObject("🗑 Remove Item"),
+                        value: JSON.stringify({
+                            modalId: id,
+                            itemId: item.id,
+                        }),
+                        style: ButtonStyle.DANGER,
                     }),
-                    style: ButtonStyle.DANGER,
-                }),
-            ],
-        });
+                ],
+            });
+        }
 
         blockBuilder.addDividerBlock();
     });

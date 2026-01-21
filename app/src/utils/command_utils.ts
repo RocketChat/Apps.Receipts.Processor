@@ -12,6 +12,11 @@ import { ReceiptProcessorApp } from "../../ReceiptProcessorApp";
 import { ReceiptHandler } from "../handler/receiptHandler";
 import { sendMessage } from './message';
 import { ChannelService } from '../service/channelService';
+import { CommandHandler } from '../commands/UserCommandHandler';
+import { BotHandler } from '../handler/botHandler';
+import { COMMAND_TRANSLATION_PROMPT } from '../prompt_library/const/prompt';
+import { COMMAND_TRANSLATION_PROMPT_COMMANDS, COMMAND_TRANSLATION_PROMPT_EXAMPLES } from '../prompts/commands/commandTranslationPrompt';
+import { CommandParseHandler } from '../commands/CommandParserHandler';
 
 export class CommandUtility {
 sender: IUser;
@@ -62,8 +67,60 @@ private showHelp(appUser: IUser): void {
     - \`/receipt thread\` - Show all receipts in the current thread (must be used in a thread)
     - \`/receipt thread_user\` - Show your receipts in the current thread (must be used in a thread)
     - \`/receipt help\` - Show this help message
+
+    **Tip:** You can also use natural language commands like:
+    - \`/receipt change currency to USD\`
+    - \`/receipt show my expenses from last week\`
     `;
     sendMessage(this.modify, appUser, this.room, helpMessage, threadId);
+}
+
+private async handleNLPCommand(appUser: IUser, threadId: string | undefined): Promise<void> {
+    try {
+        const fullCommandText = this.command.join(" ");
+        this.app.getLogger().info(`Attempting NLP parse for: ${fullCommandText}`);
+
+        const botHandler = new BotHandler(this.http, this.read);
+        const currentDate = new Date().toISOString().slice(0, 10);
+
+        const commandTranslationPrompt = COMMAND_TRANSLATION_PROMPT(
+            COMMAND_TRANSLATION_PROMPT_COMMANDS,
+            COMMAND_TRANSLATION_PROMPT_EXAMPLES(currentDate),
+            fullCommandText
+        );
+
+        const commandJson = await botHandler.processResponse(commandTranslationPrompt);
+        const parsedCommand = JSON.parse(commandJson);
+        const params = parsedCommand.params || CommandParseHandler.extractParams(fullCommandText) || {};
+
+        this.app.getLogger().info(`NLP parsed command: ${parsedCommand.command}`, params);
+
+        const commandHandler = new CommandHandler(
+            this.read,
+            this.modify,
+            this.persistence,
+            this.http,
+            this.app,
+            appUser
+        );
+
+        await commandHandler.executeCommand(
+            parsedCommand.command,
+            this.room,
+            this.sender,
+            params,
+            threadId
+        );
+    } catch (error) {
+        this.app.getLogger().error("NLP parsing failed, showing help:", error);
+        sendMessage(
+            this.modify,
+            appUser,
+            this.room,
+            `❓ I couldn't understand that command. Type \`/receipt help\` for available commands.`,
+            threadId
+        );
+    }
 }
 
 public async execute() {
@@ -179,13 +236,7 @@ public async execute() {
                 );
                 break;
             default:
-                sendMessage(
-                    this.modify,
-                    appUser,
-                    this.room,
-                    `Unknown command: ${mainCommand}. Type \`/receipt help\` for available commands.`,
-                    threadId
-                );
+                await this.handleNLPCommand(appUser, threadId);
                 break;
         }
     } catch (error) {
