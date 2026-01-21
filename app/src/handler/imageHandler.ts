@@ -102,7 +102,6 @@ export class ImageHandler {
             }
 
             const receiptData: IReceiptData = JSON.parse(parsed);
-            await receiptHandler.addReceiptData(receiptData);
             const currency = await receiptHandler.getCurrencySymbol(message.room.id);
             const question = await botHandler.processResponse(
                 RESPONSE_PROMPT(

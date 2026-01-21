@@ -47,23 +47,26 @@ export const updateReceipt = async (
     persistenceRead: IPersistenceRead,
     data: IReceiptData
 ): Promise<void> => {
-    const associations: RocketChatAssociationRecord[] = [
+    const lookupAssociations: RocketChatAssociationRecord[] = [
         Associations.withRoom(data.roomId),
         Associations.withMessage(data.messageId),
         Associations.withUserReceipts(data.userId),
-        Associations.withDate(data.receiptDate),
     ];
 
     if (data.threadId) {
-        associations.push(Associations.withThread(data.threadId));
+        lookupAssociations.push(Associations.withThread(data.threadId));
     }
 
-    const [record] = await persistenceRead.readByAssociations(associations);
-    if (!record) {
-        await persistence.createWithAssociations(data, associations);
-    } else {
-        await persistence.updateByAssociations(associations, data);
-    }
+    await persistence.removeByAssociations(lookupAssociations);
+
+    const newAssociations: RocketChatAssociationRecord[] = [
+        ...lookupAssociations,
+        Associations.withDate(data.receiptDate),
+    ];
+
+    await persistence.createWithAssociations(data, newAssociations);
+
+
 };
 
 export const getModals = async(

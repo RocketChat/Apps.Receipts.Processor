@@ -145,14 +145,14 @@ export class ReceiptHandler {
         receipt.items.forEach((item) => {
             const itemTotal = item.price * item.quantity;
             if (item.quantity > 1) {
-                summary += `• ${item.name} (${item.quantity} × ${currency}${item.price}) — ${currency}${itemTotal}\n`;
+                summary += `• ${item.name} (${item.quantity} × ${currency} ${item.price}) — ${currency} ${itemTotal}\n`;
             } else {
-                summary += `• ${item.name} — ${currency}${itemTotal}\n`;
+                summary += `• ${item.name} — ${currency} ${itemTotal}\n`;
             }
         });
-        summary += `*Extra Fees:* ${currency}${receipt.extraFee}\n`;
-        summary += `*Discounts:* ${currency}${receipt.discounts}\n`;
-        summary += `*Total:* ${currency}${receipt.totalPrice}`;
+        summary += `*Extra Fees:* ${currency} ${receipt.extraFee}\n`;
+        summary += `*Discounts:* ${currency} ${receipt.discounts}\n`;
+        summary += `*Total:* ${currency} ${receipt.totalPrice}`;
         if (showSuccess) {
             summary += `\n\n✅ Your receipt has been successfully updated.`;
         }
@@ -214,7 +214,7 @@ export class ReceiptHandler {
 
         blockBuilder.addSectionBlock({
             text: blockBuilder.newMarkdownTextObject(
-                `*Total Amount Across All Receipts:* ${currency}${receiptTotalPrice}`
+                `*Total Amount Across All Receipts:* ${currency} ${receiptTotalPrice}`
             ),
         });
     }

@@ -88,6 +88,10 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         const appUser = await this.getAppUser();
         if (!appUser) return;
 
+        if (message.sender.id === appUser.id) {
+            return;
+        }
+
         if (!this.commandHandler) {
             this.commandHandler = new CommandHandler(
                 read,
@@ -160,6 +164,9 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         persistence: IPersistence,
         modify: IModify
     ): Promise<IUIKitResponse> {
+        if (!this.uiHandler) {
+            this.uiHandler = new UserInterfaceHandler(this.getLogger(), this.getID());
+        }
         return this.uiHandler.handleBlockAction(
             context,
             read,
@@ -176,6 +183,9 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
         persistence: IPersistence,
         modify: IModify
     ): Promise<IUIKitResponse> {
+        if (!this.uiHandler) {
+            this.uiHandler = new UserInterfaceHandler(this.getLogger(), this.getID());
+        }
         return this.uiHandler.handleViewSubmit(
             context,
             read,
@@ -188,6 +198,9 @@ export class ReceiptProcessorApp extends App implements IPostMessageSent, IUIKit
     public async executeViewClosedHandler(
         context: UIKitViewCloseInteractionContext
     ): Promise<IUIKitResponse> {
+        if (!this.uiHandler) {
+            this.uiHandler = new UserInterfaceHandler(this.getLogger(), this.getID());
+        }
         return this.uiHandler.handleViewClosed(context);
     }
 

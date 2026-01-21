@@ -99,6 +99,8 @@ export class CommandHandler {
         persistence: IPersistence,
         modify: IModify
     ): Promise<void> {
+        const appUser = await this.getAppUser();
+        if (!appUser) return;
         try {
             const currentDate = new Date().toISOString().slice(0, 10);
             const commandTranslationPrompt = COMMAND_TRANSLATION_PROMPT(
@@ -120,6 +122,19 @@ export class CommandHandler {
             );
         } catch (error) {
             this.app.getLogger().error("Error in handleMessage:", error);
+            if (
+                error.message &&
+                error.message.includes("Configuration Error")
+            ) {
+                await sendMessage(
+                    modify,
+                    appUser,
+                    message.room,
+                    `❗**Error:** ${error.message}`,
+                    message.threadId,
+                );
+                return;
+            }
             await this.executeCommand(
                 "help",
                 message.room,
@@ -784,7 +799,7 @@ export class CommandHandler {
                     this.modify,
                     appUser,
                     room,
-                    "❌ Please provide a valid currency code. Example: `set room currency USD`",
+                    "❌ Please provide a currency code or symbol. Example: `set room currency USD` or `set room currency $`",
                     threadId
                 );
                 return { success: false, message: "Invalid currency" };
@@ -792,7 +807,7 @@ export class CommandHandler {
 
             await this.channelService.setCurrencyForChannel(
                 room.id,
-                currency.trim().toUpperCase()
+                currency.trim()
             );
 
             sendMessage(

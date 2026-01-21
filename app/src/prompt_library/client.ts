@@ -167,6 +167,12 @@ export class LLMClient {
         const headers = this.getHeaders(config);
         const url = this.getUrl(config);
 
+        if (!url) {
+            throw new Error(
+                "Configuration Error: The LLM API Endpoint is missing or invalid. Please check your App Settings and ensure 'API Endpoint' is set correctly."
+            );
+        }
+
         const response = await this.http.post(url, {
             headers,
             data: body,

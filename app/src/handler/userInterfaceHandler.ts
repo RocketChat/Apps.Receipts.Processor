@@ -156,6 +156,10 @@ export class UserInterfaceHandler {
                     const stored = await receiptHandler.getModals(modalId);
                     if (stored) {
                         const receiptData = stored as IReceiptData;
+                        if (receiptData.items.length <= 1) {
+                            return context.getInteractionResponder().successResponse();
+                        }
+
                         receiptData.items = receiptData.items.filter((i) => i.id !== itemId);
                         await persistence.updateByAssociation(
                             new RocketChatAssociationRecord(
@@ -201,22 +205,33 @@ export class UserInterfaceHandler {
         try {
             const state = view.state as ReceiptModalState;
             const receiptDate = state["receipt-edit-form"]?.receiptDate;
-            const extraFee = Number(state["extra-fee"]?.extraFee || 0);
-            const discounts = Number(state["discounts"]?.discounts || 0);
-            const totalPrice = Number(state["total-price"]?.totalPrice || 0);
+            const safeParseNumber = (value: string | number | undefined, fallback: number): number => {
+                if (value === undefined || value === null || value === "") return fallback;
+                const parsed = Number(value);
+                return isNaN(parsed) ? fallback : parsed;
+            };
 
             const stored = await receiptHandler.getModals(modalId);
             const originalData = stored as IReceiptData & { confirmationMessageId?: string };
             const roomId = originalData.roomId;
 
+            const extraFeeRaw = state["extra-fee"]?.extraFee;
+            const discountsRaw = state["discounts"]?.discounts;
+
+            const extraFee = safeParseNumber(extraFeeRaw, originalData.extraFee);
+            const discounts = safeParseNumber(discountsRaw, originalData.discounts);
+            const totalPrice = 0;
+
             const items: IReceiptItem[] = originalData.items.map((item) => ({
                 id: item.id,
                 name: state[`item-name-${item.id}`]?.[`itemName-${item.id}`] || item.name,
-                quantity: Number(
-                    state[`item-quantity-${item.id}`]?.[`itemQuantity-${item.id}`] || item.quantity
+                quantity: safeParseNumber(
+                    state[`item-quantity-${item.id}`]?.[`itemQuantity-${item.id}`],
+                    item.quantity
                 ),
-                price: Number(
-                    state[`item-price-${item.id}`]?.[`itemPrice-${item.id}`] || item.price
+                price: safeParseNumber(
+                    state[`item-price-${item.id}`]?.[`itemPrice-${item.id}`],
+                    item.price
                 ),
             }));
 
@@ -234,18 +249,23 @@ export class UserInterfaceHandler {
                 items,
             };
 
-            if (!receiptDate || items.length === 0) {
-                return context.getInteractionResponder().errorResponse();
+            if (!receiptDate) {
+                return context.getInteractionResponder().viewErrorResponse({
+                    viewId: modalId,
+                    errors: {
+                        "receipt-edit-form": "Please enter a valid receipt date."
+                    }
+                });
             }
 
             const appUser = await this.getAppUser(read);
             if (!appUser) return context.getInteractionResponder().errorResponse();
 
-            const existingReceipt = await receiptHandler.getReceiptByUniqueID(
-                originalData.userId,
+             const existingReceipt = await receiptHandler.getReceiptByUniqueID(
+                originalData.roomId,
                 originalData.messageId,
-                originalData.threadId,
-                originalData.roomId
+                originalData.userId,
+                originalData.threadId
             );
 
             await receiptHandler.updateReceiptData(updatedData, room, appUser);
